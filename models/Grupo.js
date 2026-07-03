@@ -5,7 +5,8 @@ const GrupoSchema = new Schema({
   nombre: { type: String, required: true },
   semanaActual: { type: String, required: true },
   cicloActual: { type: String, required: true },
-  evaluadorAsignado: { type: String, required: true }
+  evaluadorAsignado: { type: String, required: true },
+  integrantes: [{ type: Schema.Types.ObjectId }]
 });
 
 const GrupoModel = dbControlVam.model('Grupo', GrupoSchema, 'grupos');
