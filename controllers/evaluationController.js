@@ -57,6 +57,7 @@ const createEvaluation = async (req, res) => {
     await nuevaEvaluacion.save();
 
     res.status(201).json({ success: true, message: 'Evaluación guardada exitosamente', data: nuevaEvaluacion });
+    console.log(evaluationData)
   } catch (error) {
     console.error('Error al crear evaluación:', error);
     res.status(500).json({ success: false, message: 'Error al guardar la evaluación', error: error.message });
