@@ -2,20 +2,86 @@ const Grupo = require('../models/Grupo');
 const Evaluation = require('../models/Evaluation');
 const Credito = require('../models/Credito');
 
-// Obtener grupos asignados a un asesor específico
+// Obtener todos los grupos y enriquecer con ciclo y semana desde créditos
+const getAllGrupos = async (req, res) => {
+  try {
+    const grupos = await Grupo.find().lean();
+
+    const gruposConDatos = await Promise.all(grupos.map(async (grupo) => {
+      if (grupo.integrantes && grupo.integrantes.length > 0) {
+        const primerIntegrante = grupo.integrantes[0];
+        const credito = await Credito.findOne({ miembro: primerIntegrante }).lean();
+
+        if (credito) {
+          grupo.cicloActual = credito.ciclo || grupo.cicloActual;
+          grupo.semanaActual = credito.semanaActual || grupo.semanaActual;
+        }
+      }
+      return grupo;
+    }));
+
+    res.status(200).json({ success: true, data: gruposConDatos });
+  } catch (error) {
+    console.error('Error al obtener todos los grupos:', error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
+  }
+};
+
+// Obtener grupos asignados a un asesor específico y enriquecer con ciclo/semana
 const getGruposPorAsesor = async (req, res) => {
   try {
     const { asesor } = req.params;
 
-    const grupos = await Grupo.find({ evaluadorAsignado: asesor });
+
+    const grupos = await Grupo.find({ evaluadorAsignado: asesor }).lean();
 
     if (!grupos || grupos.length === 0) {
       return res.status(404).json({ success: false, message: 'No se encontraron grupos para este asesor' });
     }
 
-    res.status(200).json({ success: true, data: grupos });
+    const gruposConDatos = await Promise.all(grupos.map(async (grupo) => {
+      if (grupo.integrantes && grupo.integrantes.length > 0) {
+        const primerIntegrante = grupo.integrantes[0];
+        const credito = await Credito.findOne({ miembro: primerIntegrante }).lean();
+
+        if (credito) {
+          grupo.cicloActual = credito.ciclo || grupo.cicloActual;
+          grupo.semanaActual = credito.semanaActual || grupo.semanaActual;
+        }
+      }
+      return grupo;
+    }));
+
+    res.status(200).json({ success: true, data: gruposConDatos });
   } catch (error) {
     console.error('Error al obtener grupos por asesor:', error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
+  }
+};
+
+// Obtener un grupo en específico por ID y enriquecer con ciclo/semana
+const getGrupoById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const grupo = await Grupo.findById(id).lean();
+
+    if (!grupo) {
+      return res.status(404).json({ success: false, message: 'Grupo no encontrado' });
+    }
+
+    if (grupo.integrantes && grupo.integrantes.length > 0) {
+      const primerIntegrante = grupo.integrantes[0];
+      const credito = await Credito.findOne({ miembro: primerIntegrante }).lean();
+
+      if (credito) {
+        grupo.cicloActual = credito.ciclo || grupo.cicloActual;
+        grupo.semanaActual = credito.semanaActual || grupo.semanaActual;
+      }
+    }
+
+    res.status(200).json({ success: true, data: grupo });
+  } catch (error) {
+    console.error('Error al obtener grupo por ID:', error);
     res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
   }
 };
@@ -70,6 +136,16 @@ const getGrupos = async (req, res) => {
     res.status(200).json({ success: true, data: grupos });
   } catch (error) {
     console.error('Error al obtener grupos:', error);
+  }
+}
+
+// Obtener todas las evaluaciones
+const getAllEvaluations = async (req, res) => {
+  try {
+    const evaluaciones = await Evaluation.find().lean();
+    res.status(200).json({ success: true, count: evaluaciones.length, data: evaluaciones });
+  } catch (error) {
+    console.error('Error al obtener evaluaciones:', error);
     res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
   }
 };
@@ -164,10 +240,13 @@ const getEvaluations = async (req, res) => {
 };
 
 module.exports = {
+  getAllGrupos,
   getGruposPorAsesor,
+  getGrupoById,
   getAsesores,
   createEvaluation,
   getGrupos,
   getCicloSemanaGrupo,
-  getEvaluations
-};
+  getEvaluations,
+  getAllEvaluations
+} 
