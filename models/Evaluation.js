@@ -9,17 +9,20 @@ const CumplimientoCortoEnum = ['Totalmente', 'Parcialmente', 'No'];
 
 const EvaluationSchema = new Schema({
   datosGenerales: {
-    grupoId: { type: Schema.Types.ObjectId, ref: 'Grupo', required: true },
+    grupo: {
+      type: String,
+      required: true
+    },
     semanaEvaluada: { type: String, required: true },
     cicloEvaluado: { type: String, required: true },
     fechaEvaluacion: { type: Date, required: true },
-    procesoEvaluado: { 
-      type: String, 
-      enum: ['Recuperación', 'Renovación', 'Desembolso', 'Cobranza'], 
-      required: true 
+    procesoEvaluado: {
+      type: String,
+      enum: ['Recuperación', 'Renovación', 'Desembolso', 'Cobranza'],
+      required: true
     }
   },
-  
+
   recuperacion: {
     puntualidadAsesor: { type: String, enum: NivelEnum },
     asistenciaGrupo: { type: String, enum: NivelEnum },
@@ -53,11 +56,11 @@ const EvaluationSchema = new Schema({
     solidariosSemana15: { type: Number, default: 0 },
     multasSemana15: { type: Number, default: 0 },
     validacionInfo: {
-      ahorrosPorSemana: { type: String, enbum: CoincidenciaEnum },
-      ahorrosPorCliente: { type: String, enum: CoincidenciaEnum },
-      saldoCredito: { type: String, enum: CoincidenciaEnum },
-      solidarios: { type: String, enum: CoincidenciaEnum },
-      multas: { type: String, enum: CoincidenciaEnum }
+      ahorrosPorSemana: { type: String },
+      ahorrosPorCliente: { type: String },
+      saldoCredito: { type: String },
+      solidarios: { type: String, },
+      multas: { type: String, }
     },
     clientesBuenComportamiento: { type: String, default: "" },
     clientesInconsistencias: { type: String, default: "" },
@@ -86,6 +89,17 @@ const EvaluationSchema = new Schema({
       recomendacionesRecuperacion: { type: String, enum: CumplimientoEnum }
     },
     observacionesGenerales: { type: String, default: "" }
+  },
+
+  cobranza: {
+    diasAtraso: { type: String, enum: NivelEnum },
+    planCobranza: { type: String, enum: NivelEnum },
+    nivelRecuperacion: { type: String, enum: NivelEnum }
+  },
+
+  evidenciaFotos: {
+    type: [String],
+    default: []
   }
 }, { timestamps: true });
 

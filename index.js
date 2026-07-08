@@ -3,9 +3,11 @@ require('dotenv').config();
 require('dns').setServers(['8.8.8.8', '8.8.4.4']);
 
 const express = require('express');
-const { dbControlVam, dbEvaluaciones } = require('./config/db'); 
+const { dbControlVam, dbEvaluaciones } = require('./config/db');
 const Grupo = require('./models/Grupo');
 const Evaluation = require('./models/Evaluation');
+const axios = require("axios");
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,7 +16,21 @@ const PORT = process.env.PORT || 3000;
 dbControlVam;
 dbEvaluaciones;
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
+
+async function obtenerCicloSemana(grupoId) {
+  try {
+    const response = await axios.get(
+      `https://servidor-pwa-control.onrender.com/api/grupos/getCicloSemanaGrupo/${grupoId}`
+    );
+
+    return response.data.data;
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    return null;
+  }
+}
 
 const evaluationRoutes = require('./routes/evaluationRoutes');
 app.use('/api/evaluaciones', evaluationRoutes);
@@ -29,10 +45,10 @@ app.get('/api/test-db', async (req, res) => {
   try {
     // Consultar 5 grupos de la base dbControlVam para pruebas
     const grupos = await Grupo.find().limit(5);
-    
+
     // Consultar 5 evaluaciones de la base dbEvaluaciones para pruebas
     const evaluaciones = await Evaluation.find().limit(5);
-    
+
     res.json({
       success: true,
       mensaje: 'Consultas exitosas en ambas bases de datos',
@@ -50,6 +66,8 @@ app.get('/api/test-db', async (req, res) => {
     res.status(500).json({ success: false, error: 'Hubo un error al realizar las consultas.' });
   }
 });
+
+
 
 // Iniciar el servidor Express
 app.listen(PORT, () => {

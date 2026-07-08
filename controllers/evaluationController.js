@@ -1,13 +1,14 @@
 const Grupo = require('../models/Grupo');
 const Evaluation = require('../models/Evaluation');
+const Credito = require('../models/Credito');
 
 // Obtener grupos asignados a un asesor específico
 const getGruposPorAsesor = async (req, res) => {
   try {
-    const { asesor } = req.params; 
+    const { asesor } = req.params;
 
     const grupos = await Grupo.find({ evaluadorAsignado: asesor });
-    
+
     if (!grupos || grupos.length === 0) {
       return res.status(404).json({ success: false, message: 'No se encontraron grupos para este asesor' });
     }
@@ -35,15 +36,14 @@ const createEvaluation = async (req, res) => {
   try {
     const evaluationData = req.body;
 
-    // Verificamos que el grup exista
-    if (!evaluationData.datosGenerales || !evaluationData.datosGenerales.grupoId) {
-      return res.status(400).json({ success: false, message: 'El ID del grupo (grupoId) es obligatorio en datosGenerales' });
+    // Verificamos que el grupo venga en la petición
+    if (!evaluationData.datosGenerales || !evaluationData.datosGenerales.grupo) {
+      return res.status(400).json({ success: false, message: 'El nombre del grupo es obligatorio en datosGenerales' });
     }
 
-    
-    const grupoExiste = await Grupo.findById(evaluationData.datosGenerales.grupoId);
-    if (!grupoExiste) {
-      return res.status(404).json({ success: false, message: 'El grupo especificado no existe' });
+    // Verificamos el rango de evidenciaFotos (1 a 4 fotos)
+    if (!evaluationData.evidenciaFotos || !Array.isArray(evaluationData.evidenciaFotos) || evaluationData.evidenciaFotos.length < 1 || evaluationData.evidenciaFotos.length > 4) {
+      return res.status(400).json({ success: false, message: 'Debe proporcionar de 1 a 4 fotos como evidencia de la evaluación.' });
     }
 
     const nuevaEvaluacion = new Evaluation({
@@ -63,8 +63,110 @@ const createEvaluation = async (req, res) => {
   }
 };
 
+const getGrupos = async (req, res) => {
+  try {
+    const grupos = await Grupo.find();
+    res.status(200).json({ success: true, data: grupos });
+  } catch (error) {
+    console.error('Error al obtener grupos:', error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
+  }
+};
+
+const getCicloSemanaGrupo = async (req, res) => {
+  try {
+    const { grupoId } = req.params;
+
+    // Buscar el grupo
+    const grupo = await Grupo.findById(grupoId);
+
+    if (!grupo) {
+      return res.status(404).json({
+        success: false,
+        message: 'El grupo no existe'
+      });
+    }
+
+    // Verificar que tenga integrantes
+    if (!grupo.integrantes || grupo.integrantes.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'El grupo no tiene integrantes'
+      });
+    }
+
+    // Tomar el primer integrante
+    const primerMiembro = grupo.integrantes[0];
+
+    // Buscar el crédito activo del primer integrante
+    const credito = await Credito.findOne({
+      miembro: primerMiembro,
+      estado: 'Activo'
+    }).sort({ ciclo: -1 });
+
+    if (!credito) {
+      return res.status(404).json({
+        success: false,
+        message: 'No se encontró un crédito activo para el grupo'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        grupoId: grupo._id,
+        miembroReferencia: primerMiembro,
+        cicloActual: credito.ciclo,
+        semanaActual: credito.semanaActual
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al obtener ciclo y semana:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error.message
+    });
+  }
+};
+
+
+const getEvaluations = async (req, res) => {
+  try {
+    const evaluations = await Evaluation.find().sort({ createdAt: -1 });
+
+    // Populate manually since models are on different connection databases
+    const populated = [];
+    for (const item of evaluations) {
+      const itemObj = item.toObject();
+      if (itemObj.datosGenerales) {
+        // Soporte para registros antiguos con grupoId
+        if (itemObj.datosGenerales.grupoId && !itemObj.datosGenerales.grupo) {
+          try {
+            const grupo = await Grupo.findById(itemObj.datosGenerales.grupoId);
+            itemObj.datosGenerales.grupo = grupo ? grupo.nombre : 'Grupo Desconocido';
+          } catch (err) {
+            itemObj.datosGenerales.grupo = 'Grupo Desconocido';
+          }
+        }
+      }
+      populated.push(itemObj);
+    }
+
+    res.status(200).json({ success: true, data: populated });
+  } catch (error) {
+    console.error('Error al obtener evaluaciones:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener evaluaciones', error: error.message });
+  }
+};
+
 module.exports = {
   getGruposPorAsesor,
   getAsesores,
-  createEvaluation
+  createEvaluation,
+  getGrupos,
+  getCicloSemanaGrupo,
+  getEvaluations
 };
