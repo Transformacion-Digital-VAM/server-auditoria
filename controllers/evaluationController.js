@@ -239,6 +239,17 @@ const getEvaluations = async (req, res) => {
   }
 };
 
+
+const getEvaluationBySucursal = async (req, res) => {
+  try {
+    const { sucursal } = req.params;
+    const evaluations = await Evaluation.find({ 'datosGenerales.sucursal': sucursal });
+    res.status(200).json({ success: true, data: evaluations });
+  } catch (error) {
+    console.error('Error al obtener evaluaciones:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener evaluaciones', error: error.message });
+  }
+};
 module.exports = {
   getAllGrupos,
   getGruposPorAsesor,
@@ -248,5 +259,6 @@ module.exports = {
   getGrupos,
   getCicloSemanaGrupo,
   getEvaluations,
-  getAllEvaluations
+  getAllEvaluations,
+  getEvaluationBySucursal
 } 

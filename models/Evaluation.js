@@ -38,7 +38,10 @@ const EvaluationSchema = new Schema({
   },
 
   cargosAjustes: {
-    grupoRealizoSolidarios: { type: Boolean, default: false }
+    grupoRealizoSolidarios: { type: Boolean, default: false },
+    grupoGeneroMultas: { type: Boolean, default: false },
+    grupoGeneroMoratorios: { type: Boolean, default: false },
+    grupoRealizoAdelantos: { type: Boolean, default: false },
   },
 
   renovacion: {
