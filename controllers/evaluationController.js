@@ -1,6 +1,7 @@
 const Grupo = require('../models/Grupo');
 const Evaluation = require('../models/Evaluation');
 const Credito = require('../models/Credito');
+const { dbControlVam } = require('../config/db');
 
 // Obtener todos los grupos y enriquecer con ciclo y semana desde créditos
 const getAllGrupos = async (req, res) => {
@@ -188,13 +189,18 @@ const getCicloSemanaGrupo = async (req, res) => {
       });
     }
 
+    // Obtener los nombres de todos los integrantes
+    const miembros = await dbControlVam.collection('miembros').find({ _id: { $in: grupo.integrantes } }).toArray();
+    const integrantesNombres = miembros.map(m => `${m.nombre || ''} ${m.apellidos || ''}`.trim().replace(/\s+/g, ' '));
+
     return res.status(200).json({
       success: true,
       data: {
         grupoId: grupo._id,
         miembroReferencia: primerMiembro,
         cicloActual: credito.ciclo,
-        semanaActual: credito.semanaActual
+        semanaActual: credito.semanaActual,
+        integrantes: integrantesNombres
       }
     });
 
