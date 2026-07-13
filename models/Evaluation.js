@@ -96,8 +96,10 @@ const EvaluationSchema = new Schema({
 
   cobranza: {
     diasAtraso: { type: String, enum: NivelEnum },
-    planCobranza: { type: String, enum: NivelEnum },
-    nivelRecuperacion: { type: String, enum: NivelEnum }
+    estrategiasASEC: { type: String, enum: NivelEnum },
+    acciones: { type: String, enum: NivelEnum },
+    saldoVencido: { type: String, enum: NivelEnum },
+    observacionesGenerales: { type: String, default: "" }
   },
 
   evidenciaFotos: {
