@@ -103,6 +103,11 @@ const createEvaluation = async (req, res) => {
   try {
     const evaluationData = req.body;
 
+    // Verificamos que el evaluador venga en la petición
+    if (!evaluationData.datosGenerales || !evaluationData.datosGenerales.evaluador) {
+      return res.status(400).json({ success: false, message: 'El nombre del evaluador es obligatorio en datosGenerales' });
+    }
+
     // Verificamos que el grupo venga en la petición
     if (!evaluationData.datosGenerales || !evaluationData.datosGenerales.grupo) {
       return res.status(400).json({ success: false, message: 'El nombre del grupo es obligatorio en datosGenerales' });
