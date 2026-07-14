@@ -9,6 +9,7 @@ const CumplimientoCortoEnum = ['Totalmente', 'Parcialmente', 'No'];
 
 const EvaluationSchema = new Schema({
   datosGenerales: {
+    evaluador: { type: String, required: true },
     grupo: {
       type: String,
       required: true
