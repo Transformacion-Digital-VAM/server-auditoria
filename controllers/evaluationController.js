@@ -104,7 +104,7 @@ const createEvaluation = async (req, res) => {
     const evaluationData = req.body;
 
     // Verificamos que el evaluador venga en la petición
-    if (!evaluationData.datosGenerales || !evaluationData.datosGenerales.evaluador) {
+    if (!evaluationData.datosGenerales || !evaluationData.datosGenerales.nombreEvaluador) {
       return res.status(400).json({ success: false, message: 'El nombre del evaluador es obligatorio en datosGenerales' });
     }
 
