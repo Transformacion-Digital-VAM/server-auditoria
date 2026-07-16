@@ -118,20 +118,31 @@ const createEvaluation = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Debe proporcionar de 1 a 4 fotos como evidencia de la evaluación.' });
     }
 
-    const nuevaEvaluacion = new Evaluation({
+    const filter = {
+      'datosGenerales.grupo': evaluationData.datosGenerales.grupo,
+      'datosGenerales.semanaEvaluada': evaluationData.datosGenerales.semanaEvaluada,
+      'datosGenerales.cicloEvaluado': evaluationData.datosGenerales.cicloEvaluado,
+      'datosGenerales.procesoEvaluado': evaluationData.datosGenerales.procesoEvaluado
+    };
+
+    const update = {
       ...evaluationData,
       datosGenerales: {
         ...evaluationData.datosGenerales,
         fechaEvaluacion: evaluationData.datosGenerales.fechaEvaluacion || new Date()
       }
+    };
+
+    const evaluacionGuardada = await Evaluation.findOneAndUpdate(filter, update, {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true
     });
 
-    await nuevaEvaluacion.save();
-
-    res.status(201).json({ success: true, message: 'Evaluación guardada exitosamente', data: nuevaEvaluacion });
-    console.log(evaluationData)
+    res.status(201).json({ success: true, message: 'Evaluación guardada exitosamente', data: evaluacionGuardada });
+    console.log('Evaluación guardada/sincronizada:', evaluationData.datosGenerales.grupo);
   } catch (error) {
-    console.error('Error al crear evaluación:', error);
+    console.error('Error al crear/sincronizar evaluación:', error);
     res.status(500).json({ success: false, message: 'Error al guardar la evaluación', error: error.message });
   }
 };
