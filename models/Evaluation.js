@@ -9,21 +9,45 @@ const CumplimientoCortoEnum = ['Totalmente', 'Parcialmente', 'No'];
 
 const EvaluationSchema = new Schema({
   datosGenerales: {
-    nombreEvaluador: { type: String, required: true },
-    grupo: {
+    nombreEvaluador: {
       type: String,
       required: true
     },
-    semanaEvaluada: { type: String, required: true },
-    cicloEvaluado: { type: String, required: true },
-    fechaEvaluacion: { type: Date, required: true },
+
+    grupo: {
+      grupoId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Grupo',
+        default: null
+      },
+      nombre: {
+        type: String,
+        required: true,
+        trim: true
+      }
+    },
+
+    semanaEvaluada: {
+      type: String,
+      required: true
+    },
+
+    cicloEvaluado: {
+      type: String,
+      required: true
+    },
+
+    fechaEvaluacion: {
+      type: Date,
+      required: true
+    },
+
     procesoEvaluado: {
       type: String,
       enum: ['Recuperación', 'Renovación', 'Desembolso', 'Cobranza'],
       required: true
     }
   },
-
   recuperacion: {
     puntualidadAsesor: { type: String, enum: NivelEnum },
     asistenciaGrupo: { type: String, enum: NivelEnum },
