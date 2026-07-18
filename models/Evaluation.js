@@ -35,7 +35,8 @@ const EvaluationSchema = new Schema({
     montoEfectivo: { type: Number, default: 0 },
     montoTransferencia: { type: Number, default: 0 },
     montoDeposito: { type: Number, default: 0 },
-    hayCargosAjustes: { type: Boolean, default: false }
+    hayCargosAjustes: { type: Boolean, default: false },
+    observaciones: { type: String, default: "" }
   },
 
   cargosAjustes: {
@@ -51,7 +52,6 @@ const EvaluationSchema = new Schema({
     expedientesCompletos: { type: String, enum: NivelEnum },
     valoracionRiesgo: { type: String, enum: NivelEnum },
     observaciones: { type: String, default: "" },
-    evaluaraOtroProceso: { type: Boolean, default: false }
   },
 
   cierreCiclo: {
@@ -60,15 +60,16 @@ const EvaluationSchema = new Schema({
     solidariosSemana15: { type: Number, default: 0 },
     multasSemana15: { type: Number, default: 0 },
     validacionInfo: {
-      ahorrosPorSemana: { type: String },
-      ahorrosPorCliente: { type: String },
-      saldoCredito: { type: String },
-      solidarios: { type: String, },
-      multas: { type: String, }
+      ahorrosPorSemana: { type: String, enum: CoincidenciaEnum },
+      ahorrosPorCliente: { type: String, enum: CoincidenciaEnum },
+      saldoCredito: { type: String, enum: CoincidenciaEnum },
+      solidarios: { type: String, enum: CoincidenciaEnum },
+      multas: { type: String, enum: CoincidenciaEnum }
     },
     clientesBuenComportamiento: { type: String, default: "" },
     clientesInconsistencias: { type: String, default: "" },
-    incidencias: { type: String, default: "" }
+    incidencias: { type: String, default: "" },
+    observaciones: { type: String, default: "" },
   },
 
   desembolsoCredito: {
@@ -78,8 +79,7 @@ const EvaluationSchema = new Schema({
       comentariosReglamento: { type: String, enum: CumplimientoEnum },
       educacionFinanciera: { type: String, enum: CumplimientoEnum },
       devolucionGarantias: { type: String, enum: CumplimientoEnum },
-      pagoSancionesSolidarios: { type: String, enum: CumplimientoEnum },
-      comentariosContrato: { type: String, enum: CumplimientoEnum }
+      pagoSancionesSolidarios: { type: String, enum: CumplimientoEnum }
     },
     actividadesDurante: {
       solicitoINE: { type: String, enum: CumplimientoCortoEnum },
@@ -92,7 +92,7 @@ const EvaluationSchema = new Schema({
       mensajeCierre: { type: String, enum: CumplimientoEnum },
       recomendacionesRecuperacion: { type: String, enum: CumplimientoEnum }
     },
-    observacionesGenerales: { type: String, default: "" }
+    observaciones: { type: String, default: "" }
   },
 
   cobranza: {
@@ -100,7 +100,7 @@ const EvaluationSchema = new Schema({
     estrategiasASEC: { type: String, enum: NivelEnum },
     acciones: { type: String, enum: NivelEnum },
     saldoVencido: { type: String, enum: NivelEnum },
-    observacionesGenerales: { type: String, default: "" }
+    observaciones: { type: String, default: "" }
   },
 
   evidenciaFotos: {
