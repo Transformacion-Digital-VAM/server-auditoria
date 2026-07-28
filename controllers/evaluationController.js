@@ -23,15 +23,30 @@ const getAllGrupos = async (req, res) => {
       return { ...grupo, tipo: 'grupo' };
     }));
 
-    // ── Clientes individuales ─────────────────────────────────────────────
+    // ── Clientes individuales: enriquecer desde Crédito ──────────────────
     const clientes = await Cliente.find().lean();
-    const clientesFormateados = clientes.map((cliente) => ({
-      _id: cliente._id,
-      nombre: cliente.nombre,
-      semanaActual: cliente.semanaActual,
-      cicloActual: cliente.cicloActual,
-      evaluadorAsignado: cliente.evaluadorAsignado,
-      tipo: 'cliente',
+    const clientesFormateados = await Promise.all(clientes.map(async (cliente) => {
+      let semanaActual = '';
+      let cicloActual = '';
+
+      const credito = await Credito.findOne({
+        cliente: cliente._id,
+        estado: 'Activo'
+      }).sort({ ciclo: -1 }).lean();
+
+      if (credito) {
+        cicloActual  = credito.ciclo?.toString()        || '';
+        semanaActual = credito.semanaActual?.toString() || '';
+      }
+
+      return {
+        _id: cliente._id,
+        nombre: cliente.nombre,
+        semanaActual,
+        cicloActual,
+        evaluadorAsignado: cliente.evaluadorAsignado || '',
+        tipo: 'cliente',
+      };
     }));
 
     // ── Combinar y ordenar alfabéticamente por nombre ─────────────────────
