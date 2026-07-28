@@ -1,11 +1,13 @@
 const Grupo = require('../models/Grupo');
 const Evaluation = require('../models/Evaluation');
 const Credito = require('../models/Credito');
+const Cliente = require('../models/Cliente');
 const { dbControlVam } = require('../config/db');
 
-// Obtener todos los grupos y enriquecer con ciclo y semana desde créditos
+// Obtener todos los grupos + clientes individuales combinados
 const getAllGrupos = async (req, res) => {
   try {
+    // ── Grupos: enriquecer con ciclo y semana desde créditos ──────────────
     const grupos = await Grupo.find().lean();
 
     const gruposConDatos = await Promise.all(grupos.map(async (grupo) => {
@@ -18,12 +20,27 @@ const getAllGrupos = async (req, res) => {
           grupo.semanaActual = credito.semanaActual || grupo.semanaActual;
         }
       }
-      return grupo;
+      return { ...grupo, tipo: 'grupo' };
     }));
 
-    res.status(200).json({ success: true, data: gruposConDatos });
+    // ── Clientes individuales ─────────────────────────────────────────────
+    const clientes = await Cliente.find().lean();
+    const clientesFormateados = clientes.map((cliente) => ({
+      _id: cliente._id,
+      nombre: cliente.nombre,
+      semanaActual: cliente.semanaActual,
+      cicloActual: cliente.cicloActual,
+      evaluadorAsignado: cliente.evaluadorAsignado,
+      tipo: 'cliente',
+    }));
+
+    // ── Combinar y ordenar alfabéticamente por nombre ─────────────────────
+    const combinado = [...gruposConDatos, ...clientesFormateados]
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+    res.status(200).json({ success: true, data: combinado });
   } catch (error) {
-    console.error('Error al obtener todos los grupos:', error);
+    console.error('Error al obtener grupos y clientes:', error);
     res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
   }
 };
@@ -240,6 +257,7 @@ const getEvaluations = async (req, res) => {
     const populated = [];
     for (const item of evaluations) {
       const itemObj = item.toObject();
+
       if (itemObj.datosGenerales) {
         // Soporte para registros antiguos con grupoId
         if (itemObj.datosGenerales.grupoId && !itemObj.datosGenerales.grupo) {

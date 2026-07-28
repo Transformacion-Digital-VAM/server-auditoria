@@ -27,6 +27,19 @@ const EvaluationSchema = new Schema({
       }
     },
 
+    clienteIndividual: {
+      clienteId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Cliente',
+        default: null
+      },
+      nombre: {
+        type: String,
+        required: true,
+        trim: true
+      }
+    },
+
     semanaEvaluada: {
       type: String,
       required: true
@@ -46,6 +59,26 @@ const EvaluationSchema = new Schema({
       type: String,
       enum: ['Recuperación', 'Renovación', 'Desembolso', 'Cobranza'],
       required: true
+    },
+
+    asesorEvaluadoId: {
+      type: String,
+      default: null
+    },
+
+    asesorEvaluadoNombre: {
+      type: String,
+      default: null
+    },
+
+    coordinacionId: {
+      type: String,
+      default: null
+    },
+
+    coordinacionNombre: {
+      type: String,
+      default: null
     }
   },
   recuperacion: {

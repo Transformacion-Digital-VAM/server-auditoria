@@ -32,6 +32,18 @@ async function obtenerCicloSemana(grupoId) {
   }
 }
 
+async function obtenerUsuarios(usuarioId) {
+  try {
+    const response = await axios.get(
+      'https://servidor-pwa-control.onrender.com/api/grupos/asesores'
+    );
+    return response.data.data;
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    return null;
+  }
+}
+
 const evaluationRoutes = require('./routes/evaluationRoutes');
 app.use('/api/evaluaciones', evaluationRoutes);
 
@@ -56,7 +68,7 @@ app.get('/api/test-db', async (req, res) => {
         totalObtenidos: grupos.length,
         data: grupos
       },
-      db_auditoria_vam: {
+      db_test_auditoria: {
         totalObtenidos: evaluaciones.length,
         data: evaluaciones
       }
