@@ -8,28 +8,36 @@ const axios = require('axios');
 // Obtener todos los grupos + clientes individuales combinados
 const getAllGrupos = async (req, res) => {
     try {
-        // ── Obtenemos mapa de asesores (id/username -> nombre) ──────────────
+        // ── Obtenemos mapa de asesores y coordinaciones desde API remota ──
         const asesoresMap = new Map();
+        const coordinacionesMap = new Map();
+
         try {
             const resp = await axios.get('https://servidor-pwa-control.onrender.com/api/users/users-asesores');
-            if (Array.isArray(resp.data)) {
-                resp.data.forEach(u => {
-                    const nombre = u.nombre || u.username || '';
-                    if (u._id) asesoresMap.set(u._id.toString(), nombre);
-                    if (u.username) asesoresMap.set(u.username.toString(), nombre);
-                    if (u.nombre) asesoresMap.set(u.nombre.toString(), nombre);
+            const userList = Array.isArray(resp.data) ? resp.data : (resp.data?.data || []);
+            userList.forEach(u => {
+                const nombre = u.nombre || u.username || '';
+                const coord = (typeof u.coordinacion === 'object' && u.coordinacion?.nombre)
+                    ? u.coordinacion.nombre
+                    : (u.coordinacionNombre || u.coordinacion || '');
+
+                const keys = [u._id?.toString(), u.username?.toString(), u.nombre?.toString()].filter(Boolean);
+                keys.forEach(k => {
+                    if (nombre) asesoresMap.set(k, nombre);
+                    if (coord) coordinacionesMap.set(k, coord);
                 });
-            }
+            });
         } catch (err) {
-            console.error('Error al obtener mapa de asesores:', err.message);
+            console.error('Error al obtener mapa de asesores/coordinaciones:', err.message);
         }
 
         const grupos = await Grupo.find().lean();
 
         const gruposConDatos = await Promise.all(grupos.map(async (grupo) => {
+            let credito = null;
             if (grupo.integrantes && grupo.integrantes.length > 0) {
                 const primerIntegrante = grupo.integrantes[0];
-                const credito = await Credito.findOne({ miembro: primerIntegrante }).lean();
+                credito = await Credito.findOne({ miembro: primerIntegrante }).lean();
 
                 if (credito) {
                     grupo.cicloActual = credito.ciclo || grupo.cicloActual;
@@ -37,13 +45,19 @@ const getAllGrupos = async (req, res) => {
                 }
             }
 
-            const rawAsesor = grupo.asesor || grupo.evaluadorAsignado || '';
+            const rawAsesor = grupo.asesor || grupo.evaluadorAsignado || credito?.asesor || credito?.evaluadorAsignado || '';
             const asesorNombre = asesoresMap.get(rawAsesor.toString()) || rawAsesor.toString();
+            const rawCoord = grupo.coordinacionNombre || grupo.coordinacion || credito?.coordinacion || credito?.coordinacionNombre || '';
+            const coordNombre = (typeof rawCoord === 'object' && rawCoord?.nombre)
+                ? rawCoord.nombre
+                : (rawCoord.toString() || coordinacionesMap.get(rawAsesor.toString()) || coordinacionesMap.get(asesorNombre) || '');
 
             return {
                 ...grupo,
                 evaluadorAsignado: asesorNombre,
                 asesor: asesorNombre,
+                coordinacion: coordNombre,
+                coordinacionNombre: coordNombre,
                 tipo: 'grupo'
             };
         }));
@@ -65,12 +79,22 @@ const getAllGrupos = async (req, res) => {
             const cicloActual = credito?.ciclo?.toString() || cliente.cicloActual?.toString() || '';
             const semanaActual = credito?.semanaActual?.toString() || cliente.semanaActual?.toString() || '';
 
+            const rawAsesor = cliente.asesor || cliente.evaluadorAsignado || credito?.asesor || credito?.evaluadorAsignado || '';
+            const asesorNombre = asesoresMap.get(rawAsesor.toString()) || rawAsesor.toString();
+            const rawCoord = cliente.coordinacionNombre || cliente.coordinacion || credito?.coordinacion || credito?.coordinacionNombre || '';
+            const coordNombre = (typeof rawCoord === 'object' && rawCoord?.nombre)
+                ? rawCoord.nombre
+                : (rawCoord.toString() || coordinacionesMap.get(rawAsesor.toString()) || coordinacionesMap.get(asesorNombre) || '');
+
             return {
                 _id: cliente._id,
                 nombre: cliente.nombre,
                 semanaActual,
                 cicloActual,
-                evaluadorAsignado: cliente.evaluadorAsignado || '',
+                evaluadorAsignado: asesorNombre,
+                asesor: asesorNombre,
+                coordinacion: coordNombre,
+                coordinacionNombre: coordNombre,
                 tipo: 'cliente',
             };
         }));
