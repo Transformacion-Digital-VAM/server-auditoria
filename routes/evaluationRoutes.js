@@ -4,6 +4,7 @@ const evaluationController = require('../controllers/evaluationController');
 
 // Rutas de grupos (más específicas primero)
 router.get('/grupos/getCicloSemanaGrupo/:grupoId', evaluationController.getCicloSemanaGrupo);
+router.get('/grupos/asesores/grupo/:grupoId', evaluationController.getAsesorPorGrupo);
 router.get('/grupos/:asesor', evaluationController.getGruposPorAsesor);
 router.get('/grupos', evaluationController.getAllGrupos);
 router.get('/grupo/:id', evaluationController.getGrupoById);

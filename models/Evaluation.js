@@ -22,7 +22,7 @@ const EvaluationSchema = new Schema({
       },
       nombre: {
         type: String,
-        required: true,
+        default: '',
         trim: true
       }
     },
@@ -35,7 +35,7 @@ const EvaluationSchema = new Schema({
       },
       nombre: {
         type: String,
-        required: true,
+        default: '',
         trim: true
       }
     },
