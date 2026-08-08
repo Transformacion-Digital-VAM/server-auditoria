@@ -81,6 +81,7 @@ const EvaluationSchema = new Schema({
       default: null
     }
   },
+
   recuperacion: {
     puntualidadAsesor: { type: String, enum: NivelEnum },
     asistenciaGrupo: { type: String, enum: NivelEnum },

@@ -65,12 +65,16 @@ const getAllGrupos = async (req, res) => {
             const cicloActual = credito?.ciclo?.toString() || cliente.cicloActual?.toString() || '';
             const semanaActual = credito?.semanaActual?.toString() || cliente.semanaActual?.toString() || '';
 
+            const rawAsesor = cliente.asesor || cliente.evaluadorAsignado || credito?.asesor || credito?.evaluadorAsignado || '';
+            const asesorNombre = asesoresMap.get(rawAsesor.toString()) || rawAsesor.toString();
+
             return {
                 _id: cliente._id,
                 nombre: cliente.nombre,
                 semanaActual,
                 cicloActual,
-                evaluadorAsignado: cliente.evaluadorAsignado || '',
+                evaluadorAsignado: asesorNombre,
+                asesor: asesorNombre,
                 tipo: 'cliente',
             };
         }));
@@ -423,21 +427,37 @@ const getEvaluations = async (req, res) => {
     }
 };
 
-// Obtener el asesor asignado a un grupo específico por ID (mapeado a su nombre real)
+// Obtener el asesor asignado a un grupo o cliente específico por ID (mapeado a su nombre real)
 const getAsesorPorGrupo = async (req, res) => {
     try {
         const { grupoId } = req.params;
-        const grupo = await Grupo.findById(grupoId).lean();
+        let entidad = await Grupo.findById(grupoId).lean();
+        let esCliente = false;
 
-        if (!grupo) {
+        if (!entidad) {
+            entidad = await Cliente.findById(grupoId).lean();
+            esCliente = true;
+        }
+
+        if (!entidad) {
             return res.status(404).json({
                 success: false,
-                message: 'Grupo no encontrado'
+                message: 'Grupo o cliente no encontrado'
             });
         }
 
-        const rawAsesor = grupo.asesor || grupo.evaluadorAsignado || null;
-        let asesorNombre = rawAsesor;
+        let rawAsesor = entidad.asesor || entidad.evaluadorAsignado || null;
+
+        if (!rawAsesor && esCliente) {
+            const credito = await Credito.findOne({
+                $or: [{ cliente: entidad._id }, { miembro: entidad._id }]
+            }).sort({ ciclo: -1 }).lean();
+            if (credito) {
+                rawAsesor = credito.asesor || credito.evaluadorAsignado || null;
+            }
+        }
+
+        let asesorNombre = rawAsesor ? rawAsesor.toString() : null;
 
         if (rawAsesor) {
             try {
@@ -460,12 +480,12 @@ const getAsesorPorGrupo = async (req, res) => {
         return res.status(200).json({
             success: true,
             data: {
-                grupoId: grupo._id,
+                grupoId: entidad._id,
                 asesor: asesorNombre
             }
         });
     } catch (error) {
-        console.error('Error al obtener asesor del grupo:', error);
+        console.error('Error al obtener asesor:', error);
         return res.status(500).json({
             success: false,
             message: 'Error interno del servidor',
@@ -473,7 +493,6 @@ const getAsesorPorGrupo = async (req, res) => {
         });
     }
 };
-
 
 const getEvaluationBySucursal = async (req, res) => {
     try {
@@ -485,6 +504,65 @@ const getEvaluationBySucursal = async (req, res) => {
         res.status(500).json({ success: false, message: 'Error al obtener evaluaciones', error: error.message });
     }
 };
+
+const getClientesMaster = async (req, res) => {
+    try {
+        const response = await fetch(
+            'https://servidor-pwa-control.onrender.com/api/clientes/clientes-master'
+        );
+
+        if (!response.ok) {
+            return res.status(response.status).json({
+                success: false,
+                message: 'Error al consultar el servidor remoto'
+            });
+        }
+
+        const data = await response.json();
+
+        res.status(200).json(data);
+
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener clientes master',
+            error: error.message
+        });
+    }
+};
+
+
+
+const getClientesEjecutivas = async (req, res) => {
+    try {
+        const response = await axios.get('https://servidor-pwa-control.onrender.com/api/clientes/clientes-master/');
+        let clientes = [];
+        if (Array.isArray(response.data)) {
+            clientes = response.data
+                .map(u => u.nombre || u.username)
+                .filter(Boolean);
+        } else if (response.data && Array.isArray(response.data.data)) {
+            clientes = response.data.data
+                .map(u => u.nombre || u.username)
+                .filter(Boolean);
+        }
+
+        const distinctLocal = await Grupo.distinct('evaluadorAsignado');
+        const combinados = Array.from(new Set([...clientes, ...distinctLocal.filter(Boolean)])).sort();
+
+        res.status(200).json({ success: true, data: combinados });
+    } catch (error) {
+        console.error('Error al obtener clientes remotos:', error.message);
+        try {
+            const distinctLocal = await Grupo.distinct('evaluadorAsignado');
+            res.status(200).json({ success: true, data: distinctLocal.filter(Boolean) });
+        } catch (err) {
+            res.status(500).json({ success: false, message: 'Error al obtener clientes', error: err.message });
+        }
+    }
+}
 module.exports = {
     getAllGrupos,
     getGruposPorAsesor,
@@ -496,5 +574,7 @@ module.exports = {
     getCicloSemanaGrupo,
     getEvaluations,
     getAllEvaluations,
-    getEvaluationBySucursal
+    getEvaluationBySucursal,
+    getClientesEjecutivas,
+    getClientesMaster
 }
