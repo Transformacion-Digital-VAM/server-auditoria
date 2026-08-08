@@ -81,13 +81,10 @@ const getAllGrupos = async (req, res) => {
 
             const rawAsesor = cliente.asesor || cliente.evaluadorAsignado || credito?.asesor || credito?.evaluadorAsignado || '';
             const asesorNombre = asesoresMap.get(rawAsesor.toString()) || rawAsesor.toString();
-<<<<<<< HEAD
-=======
             const rawCoord = cliente.coordinacionNombre || cliente.coordinacion || credito?.coordinacion || credito?.coordinacionNombre || '';
             const coordNombre = (typeof rawCoord === 'object' && rawCoord?.nombre)
                 ? rawCoord.nombre
                 : (rawCoord.toString() || coordinacionesMap.get(rawAsesor.toString()) || coordinacionesMap.get(asesorNombre) || '');
->>>>>>> 045824a122411953714eefe1eb90844e32232297
 
             return {
                 _id: cliente._id,
@@ -96,11 +93,8 @@ const getAllGrupos = async (req, res) => {
                 cicloActual,
                 evaluadorAsignado: asesorNombre,
                 asesor: asesorNombre,
-<<<<<<< HEAD
-=======
                 coordinacion: coordNombre,
                 coordinacionNombre: coordNombre,
->>>>>>> 045824a122411953714eefe1eb90844e32232297
                 tipo: 'cliente',
             };
         }));
@@ -589,6 +583,32 @@ const getClientesEjecutivas = async (req, res) => {
         }
     }
 }
+
+
+const getMiembrosGrupoConIndividual = async (req, res) => {
+    try {
+        const { grupoId, estado } = req.query;
+        let url = 'https://servidor-pwa-control.onrender.com/api/clientes/miembros-grupo-con-individual';
+        const queryParams = [];
+        if (grupoId) queryParams.push(`grupoId=${grupoId}`);
+        if (estado) queryParams.push(`estado=${estado}`);
+        
+        if (queryParams.length > 0) {
+            url += `?${queryParams.join('&')}`;
+        }
+        
+        const response = await axios.get(url);
+        res.status(200).json(response.data);
+    } catch (error) {
+        console.error('Error al obtener miembros con crédito individual:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Error al comunicarse con la API externa',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllGrupos,
     getGruposPorAsesor,
@@ -602,5 +622,6 @@ module.exports = {
     getAllEvaluations,
     getEvaluationBySucursal,
     getClientesEjecutivas,
-    getClientesMaster
+    getClientesMaster,
+    getMiembrosGrupoConIndividual
 }
