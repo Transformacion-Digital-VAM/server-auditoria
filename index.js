@@ -22,7 +22,7 @@ app.use(express.urlencoded({ limit: '20mb', extended: true }));
 async function obtenerCicloSemana(grupoId) {
   try {
     const response = await axios.get(
-      `https://servidor-pwa-control.onrender.com/api/grupos/getCicloSemanaGrupo/${grupoId}`
+      `https://server-auditoria-7fpm.onrender.com/api/grupos/getCicloSemanaGrupo/${grupoId}`
     );
 
     return response.data.data;
@@ -35,7 +35,7 @@ async function obtenerCicloSemana(grupoId) {
 async function obtenerUsuarios(usuarioId) {
   try {
     const response = await axios.get(
-      'https://servidor-pwa-control.onrender.com/api/grupos/asesores'
+      'https://server-auditoria-7fpm.onrender.com/api/grupos/asesores'
     );
     return response.data.data;
   } catch (error) {
