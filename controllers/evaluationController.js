@@ -5,40 +5,130 @@ const Cliente = require('../models/Cliente');
 const { dbControlVam } = require('../config/db');
 const axios = require('axios');
 
-// Obtener todos los grupos + clientes individuales combinados
+// ── Cache en memoria para asesores y coordinaciones (TTL: 10 minutos) ──
+let asesoresCache = {
+    data: null,
+    asesoresMap: new Map(),
+    coordinacionesMap: new Map(),
+    expiresAt: 0
+};
+
+async function getAsesoresData() {
+    const now = Date.now();
+    if (asesoresCache.data && now < asesoresCache.expiresAt) {
+        return asesoresCache;
+    }
+
+    const asesoresMap = new Map();
+    const coordinacionesMap = new Map();
+    let rawList = [];
+
+    try {
+        const resp = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/users/users-asesores', {
+            timeout: 8000
+        });
+        rawList = Array.isArray(resp.data) ? resp.data : (resp.data?.data || []);
+        rawList.forEach(u => {
+            const nombre = u.nombre || u.username || '';
+            const coord = (typeof u.coordinacion === 'object' && u.coordinacion?.nombre)
+                ? u.coordinacion.nombre
+                : (u.coordinacionNombre || u.coordinacion || '');
+
+            const keys = [u._id?.toString(), u.username?.toString(), u.nombre?.toString()].filter(Boolean);
+            keys.forEach(k => {
+                if (nombre) asesoresMap.set(k, nombre);
+                if (coord) coordinacionesMap.set(k, coord);
+            });
+        });
+
+        asesoresCache = {
+            data: rawList,
+            asesoresMap,
+            coordinacionesMap,
+            expiresAt: now + (10 * 60 * 1000) // 10 minutos de caché
+        };
+    } catch (err) {
+        console.error('Error al obtener mapa de asesores/coordinaciones (usando caché si existe):', err.message);
+        if (asesoresCache.data) {
+            return asesoresCache;
+        }
+    }
+
+    return { data: rawList, asesoresMap, coordinacionesMap };
+}
+
+// Obtener todos los grupos + clientes individuales combinados (Optimizado con Batch Queries)
 const getAllGrupos = async (req, res) => {
     try {
-        // ── Obtenemos mapa de asesores y coordinaciones desde API remota ──
-        const asesoresMap = new Map();
-        const coordinacionesMap = new Map();
+        const { asesoresMap, coordinacionesMap } = await getAsesoresData();
 
-        try {
-            const resp = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/users/users-asesores');
-            const userList = Array.isArray(resp.data) ? resp.data : (resp.data?.data || []);
-            userList.forEach(u => {
-                const nombre = u.nombre || u.username || '';
-                const coord = (typeof u.coordinacion === 'object' && u.coordinacion?.nombre)
-                    ? u.coordinacion.nombre
-                    : (u.coordinacionNombre || u.coordinacion || '');
+        // 1. Obtener grupos y clientes en paralelo (2 consultas)
+        const [grupos, clientes] = await Promise.all([
+            Grupo.find().lean(),
+            Cliente.find().lean()
+        ]);
 
-                const keys = [u._id?.toString(), u.username?.toString(), u.nombre?.toString()].filter(Boolean);
-                keys.forEach(k => {
-                    if (nombre) asesoresMap.set(k, nombre);
-                    if (coord) coordinacionesMap.set(k, coord);
-                });
-            });
-        } catch (err) {
-            console.error('Error al obtener mapa de asesores/coordinaciones:', err.message);
+        // 2. Extraer IDs de integrantes y clientes para consultar créditos en lote
+        const memberIds = [];
+        grupos.forEach(g => {
+            if (g.integrantes && g.integrantes.length > 0) {
+                memberIds.push(g.integrantes[0]);
+            }
+        });
+
+        const clientIds = clientes.map(c => c._id);
+
+        // 3. Consultar todos los créditos en 1 sola consulta en lote (elimina N+1 queries)
+        const creditQueries = [];
+        if (memberIds.length > 0) {
+            creditQueries.push({ miembro: { $in: memberIds } });
+        }
+        if (clientIds.length > 0) {
+            creditQueries.push({ cliente: { $in: clientIds } });
+            creditQueries.push({ miembro: { $in: clientIds } });
         }
 
-        const grupos = await Grupo.find().lean();
+        let creditos = [];
+        if (creditQueries.length > 0) {
+            creditos = await Credito.find({ $or: creditQueries }).sort({ ciclo: -1 }).lean();
+        }
 
-        const gruposConDatos = await Promise.all(grupos.map(async (grupo) => {
+        // 4. Indexar créditos en Mapas en memoria para acceso O(1)
+        const creditoPorMiembro = new Map();
+        const creditoPorClienteActivo = new Map();
+        const creditoPorClienteCualquiera = new Map();
+
+        creditos.forEach(c => {
+            const mId = c.miembro?.toString();
+            const clId = c.cliente?.toString();
+
+            if (mId && !creditoPorMiembro.has(mId)) {
+                creditoPorMiembro.set(mId, c);
+            }
+            if (clId) {
+                if (c.estado === 'Activo' && !creditoPorClienteActivo.has(clId)) {
+                    creditoPorClienteActivo.set(clId, c);
+                }
+                if (!creditoPorClienteCualquiera.has(clId)) {
+                    creditoPorClienteCualquiera.set(clId, c);
+                }
+            }
+            if (mId) {
+                if (c.estado === 'Activo' && !creditoPorClienteActivo.has(mId)) {
+                    creditoPorClienteActivo.set(mId, c);
+                }
+                if (!creditoPorClienteCualquiera.has(mId)) {
+                    creditoPorClienteCualquiera.set(mId, c);
+                }
+            }
+        });
+
+        // 5. Mapear grupos en memoria
+        const gruposConDatos = grupos.map(grupo => {
             let credito = null;
             if (grupo.integrantes && grupo.integrantes.length > 0) {
-                const primerIntegrante = grupo.integrantes[0];
-                credito = await Credito.findOne({ miembro: primerIntegrante }).lean();
-
+                const primerIntegrante = grupo.integrantes[0].toString();
+                credito = creditoPorMiembro.get(primerIntegrante);
                 if (credito) {
                     grupo.cicloActual = credito.ciclo || grupo.cicloActual;
                     grupo.semanaActual = credito.semanaActual || grupo.semanaActual;
@@ -60,21 +150,12 @@ const getAllGrupos = async (req, res) => {
                 coordinacionNombre: coordNombre,
                 tipo: 'grupo'
             };
-        }));
+        });
 
-        // ── Clientes individuales: enriquecer desde Crédito ──────────────────
-        const clientes = await Cliente.find().lean();
-        const clientesFormateados = await Promise.all(clientes.map(async (cliente) => {
-            let credito = await Credito.findOne({
-                $or: [{ cliente: cliente._id }, { miembro: cliente._id }],
-                estado: 'Activo'
-            }).sort({ ciclo: -1 }).lean();
-
-            if (!credito) {
-                credito = await Credito.findOne({
-                    $or: [{ cliente: cliente._id }, { miembro: cliente._id }]
-                }).sort({ ciclo: -1 }).lean();
-            }
+        // 6. Mapear clientes en memoria
+        const clientesFormateados = clientes.map(cliente => {
+            const cId = cliente._id.toString();
+            const credito = creditoPorClienteActivo.get(cId) || creditoPorClienteCualquiera.get(cId);
 
             const cicloActual = credito?.ciclo?.toString() || cliente.cicloActual?.toString() || '';
             const semanaActual = credito?.semanaActual?.toString() || cliente.semanaActual?.toString() || '';
@@ -97,9 +178,9 @@ const getAllGrupos = async (req, res) => {
                 coordinacionNombre: coordNombre,
                 tipo: 'cliente',
             };
-        }));
+        });
 
-        // ── Combinar y ordenar alfabéticamente por nombre ─────────────────────
+        // 7. Combinar y ordenar alfabéticamente
         const combinado = [...gruposConDatos, ...clientesFormateados]
             .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
 
@@ -110,30 +191,40 @@ const getAllGrupos = async (req, res) => {
     }
 };
 
-// Obtener grupos asignados a un asesor específico y enriquecer con ciclo/semana
+// Obtener grupos asignados a un asesor específico y enriquecer con ciclo/semana en lote
 const getGruposPorAsesor = async (req, res) => {
     try {
         const { asesor } = req.params;
-
-
         const grupos = await Grupo.find({ evaluadorAsignado: asesor }).lean();
 
         if (!grupos || grupos.length === 0) {
             return res.status(404).json({ success: false, message: 'No se encontraron grupos para este asesor' });
         }
 
-        const gruposConDatos = await Promise.all(grupos.map(async (grupo) => {
-            if (grupo.integrantes && grupo.integrantes.length > 0) {
-                const primerIntegrante = grupo.integrantes[0];
-                const credito = await Credito.findOne({ miembro: primerIntegrante }).lean();
+        const memberIds = grupos
+            .filter(g => g.integrantes && g.integrantes.length > 0)
+            .map(g => g.integrantes[0]);
 
+        const creditos = await Credito.find({ miembro: { $in: memberIds } }).lean();
+        const creditoPorMiembro = new Map();
+        creditos.forEach(c => {
+            const mId = c.miembro?.toString();
+            if (mId && !creditoPorMiembro.has(mId)) {
+                creditoPorMiembro.set(mId, c);
+            }
+        });
+
+        const gruposConDatos = grupos.map(grupo => {
+            if (grupo.integrantes && grupo.integrantes.length > 0) {
+                const primerIntegrante = grupo.integrantes[0].toString();
+                const credito = creditoPorMiembro.get(primerIntegrante);
                 if (credito) {
                     grupo.cicloActual = credito.ciclo || grupo.cicloActual;
                     grupo.semanaActual = credito.semanaActual || grupo.semanaActual;
                 }
             }
             return grupo;
-        }));
+        });
 
         res.status(200).json({ success: true, data: gruposConDatos });
     } catch (error) {
@@ -169,19 +260,13 @@ const getGrupoById = async (req, res) => {
     }
 };
 
-// Obtener todos los asesores desde el endpoint remoto de usuarios
+// Obtener todos los asesores (usa caché en memoria)
 const getAsesores = async (req, res) => {
     try {
-        const response = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/users/users-asesores');
+        const { data: rawUsers } = await getAsesoresData();
         let asesores = [];
-        if (Array.isArray(response.data)) {
-            asesores = response.data
-                .map(u => u.nombre || u.username)
-                .filter(Boolean);
-        } else if (response.data && Array.isArray(response.data.data)) {
-            asesores = response.data.data
-                .map(u => u.nombre || u.username)
-                .filter(Boolean);
+        if (Array.isArray(rawUsers)) {
+            asesores = rawUsers.map(u => u.nombre || u.username).filter(Boolean);
         }
 
         const distinctLocal = await Grupo.distinct('evaluadorAsignado');
@@ -189,7 +274,7 @@ const getAsesores = async (req, res) => {
 
         res.status(200).json({ success: true, data: combinados });
     } catch (error) {
-        console.error('Error al obtener asesores remotos:', error.message);
+        console.error('Error al obtener asesores:', error.message);
         try {
             const distinctLocal = await Grupo.distinct('evaluadorAsignado');
             res.status(200).json({ success: true, data: distinctLocal.filter(Boolean) });
@@ -204,12 +289,10 @@ const createEvaluation = async (req, res) => {
     try {
         const evaluationData = req.body;
 
-        // Verificamos que el evaluador venga en la petición
         if (!evaluationData.datosGenerales || !evaluationData.datosGenerales.nombreEvaluador) {
             return res.status(400).json({ success: false, message: 'El nombre del evaluador es obligatorio en datosGenerales' });
         }
 
-        // Extraer nombre del grupo/cliente
         let rawGrupo = evaluationData.datosGenerales.grupo;
         let grupoNombreStr = typeof rawGrupo === 'object' ? (rawGrupo.nombre || '') : (rawGrupo || '');
 
@@ -221,7 +304,6 @@ const createEvaluation = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El nombre del grupo o cliente es obligatorio en datosGenerales' });
         }
 
-        // Verificamos el rango de evidenciaFotos (1 a 4 fotos)
         if (!evaluationData.evidenciaFotos || !Array.isArray(evaluationData.evidenciaFotos) || evaluationData.evidenciaFotos.length < 1 || evaluationData.evidenciaFotos.length > 4) {
             return res.status(400).json({ success: false, message: 'Debe proporcionar de 1 a 4 fotos como evidencia de la evaluación.' });
         }
@@ -259,7 +341,7 @@ const createEvaluation = async (req, res) => {
             }
         }
 
-        // ── 2. Resolver información del asesor y su coordinación ───────────
+        // ── 2. Resolver información del asesor y su coordinación con caché ───────────
         const targetAsesorName = evaluationData.datosGenerales.asesorGrupo ||
             evaluationData.datosGenerales.asesorEvaluadoNombre || '';
 
@@ -269,26 +351,22 @@ const createEvaluation = async (req, res) => {
         let coordinacionNombre = evaluationData.datosGenerales.coordinacionNombre || null;
 
         if (targetAsesorName) {
-            try {
-                const resp = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/users/users-asesores');
-                if (Array.isArray(resp.data)) {
-                    const userMatch = resp.data.find(u =>
-                        (u.nombre && u.nombre.trim().toLowerCase() === targetAsesorName.trim().toLowerCase()) ||
-                        (u.username && u.username.trim().toLowerCase() === targetAsesorName.trim().toLowerCase()) ||
-                        (u._id && u._id.toString() === targetAsesorName)
-                    );
+            const { data: userList } = await getAsesoresData();
+            if (Array.isArray(userList)) {
+                const userMatch = userList.find(u =>
+                    (u.nombre && u.nombre.trim().toLowerCase() === targetAsesorName.trim().toLowerCase()) ||
+                    (u.username && u.username.trim().toLowerCase() === targetAsesorName.trim().toLowerCase()) ||
+                    (u._id && u._id.toString() === targetAsesorName)
+                );
 
-                    if (userMatch) {
-                        asesorEvaluadoId = userMatch._id ? userMatch._id.toString() : asesorEvaluadoId;
-                        asesorEvaluadoNombre = userMatch.nombre || userMatch.username || asesorEvaluadoNombre;
-                        if (userMatch.coordinacion) {
-                            coordinacionId = userMatch.coordinacion._id ? userMatch.coordinacion._id.toString() : null;
-                            coordinacionNombre = userMatch.coordinacion.nombre || null;
-                        }
+                if (userMatch) {
+                    asesorEvaluadoId = userMatch._id ? userMatch._id.toString() : asesorEvaluadoId;
+                    asesorEvaluadoNombre = userMatch.nombre || userMatch.username || asesorEvaluadoNombre;
+                    if (userMatch.coordinacion) {
+                        coordinacionId = userMatch.coordinacion._id ? userMatch.coordinacion._id.toString() : null;
+                        coordinacionNombre = (typeof userMatch.coordinacion === 'object' ? userMatch.coordinacion.nombre : userMatch.coordinacion) || null;
                     }
                 }
-            } catch (err) {
-                console.error('Error al resolver asesor/coordinación remoto:', err.message);
             }
         }
 
@@ -323,7 +401,6 @@ const createEvaluation = async (req, res) => {
         });
 
         res.status(201).json({ success: true, message: 'Evaluación guardada exitosamente', data: evaluacionGuardada });
-        console.log(`Evaluación guardada para: ${grupoNombreStr} | grupoId: ${grupoObj.grupoId} | Asesor: ${asesorEvaluadoNombre} | Coordinación: ${coordinacionNombre}`);
     } catch (error) {
         console.error('Error al crear/sincronizar evaluación:', error);
         res.status(500).json({ success: false, message: 'Error al guardar la evaluación', error: error.message });
@@ -332,19 +409,23 @@ const createEvaluation = async (req, res) => {
 
 const getGrupos = async (req, res) => {
     try {
-        const grupos = await Grupo.find();
+        const grupos = await Grupo.find().lean();
         res.status(200).json({ success: true, data: grupos });
     } catch (error) {
         console.error('Error al obtener grupos:', error);
+        res.status(500).json({ success: false, message: 'Error al obtener grupos', error: error.message });
     }
-}
+};
 
-
-
-// Obtener todas las evaluaciones
+// Obtener todas las evaluaciones (con soporte para excluir fotos pesadas si se requiere)
 const getAllEvaluations = async (req, res) => {
     try {
-        const evaluaciones = await Evaluation.find().lean();
+        const includePhotos = req.query.includePhotos === 'true';
+        let query = Evaluation.find().sort({ createdAt: -1 });
+        if (!includePhotos) {
+            query = query.select('-evidenciaFotos');
+        }
+        const evaluaciones = await query.lean();
         res.status(200).json({ success: true, count: evaluaciones.length, data: evaluaciones });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
@@ -356,89 +437,57 @@ const getCicloSemanaGrupo = async (req, res) => {
     try {
         const { grupoId } = req.params;
 
-        // Buscar el grupo
-        const grupo = await Grupo.findById(grupoId);
-
+        const grupo = await Grupo.findById(grupoId).lean();
         if (!grupo) {
-            return res.status(404).json({
-                success: false,
-                message: 'El grupo no existe'
-            });
+            return res.status(404).json({ success: false, message: 'El grupo no existe' });
         }
 
-        // Verificar que tenga integrantes
-        if (!grupo.integrantes || grupo.integrantes.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'El grupo no tiene integrantes'
-            });
-        }
+        if (!grupo.integrantes || grupo.integrantes.length > 0) {
+            const primerMiembro = grupo.integrantes[0];
+            const credito = await Credito.findOne({ miembro: primerMiembro, estado: 'Activo' })
+                .sort({ ciclo: -1 })
+                .lean();
 
-        // Tomar el primer integrante
-        const primerMiembro = grupo.integrantes[0];
-
-        // Buscar el crédito activo del primer integrante
-        const credito = await Credito.findOne({
-            miembro: primerMiembro,
-            estado: 'Activo'
-        }).sort({ ciclo: -1 });
-
-        if (!credito) {
-            return res.status(404).json({
-                success: false,
-                message: 'No se encontró un crédito activo para el grupo'
-            });
-        }
-
-        // Obtener los nombres de todos los integrantes
-        const miembros = await dbControlVam.collection('miembros').find({ _id: { $in: grupo.integrantes } }).toArray();
-        const integrantesNombres = miembros.map(m => `${m.nombre || ''} ${m.apellidos || ''}`.trim().replace(/\s+/g, ' '));
-
-        return res.status(200).json({
-            success: true,
-            data: {
-                grupoId: grupo._id,
-                miembroReferencia: primerMiembro,
-                cicloActual: credito.ciclo,
-                semanaActual: credito.semanaActual,
-                integrantes: integrantesNombres
+            if (!credito) {
+                return res.status(404).json({ success: false, message: 'No se encontró un crédito activo para el grupo' });
             }
-        });
 
+            const miembros = await dbControlVam.collection('miembros')
+                .find({ _id: { $in: grupo.integrantes } })
+                .toArray();
+            const integrantesNombres = miembros.map(m => `${m.nombre || ''} ${m.apellidos || ''}`.trim().replace(/\s+/g, ' '));
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    grupoId: grupo._id,
+                    miembroReferencia: primerMiembro,
+                    cicloActual: credito.ciclo,
+                    semanaActual: credito.semanaActual,
+                    integrantes: integrantesNombres
+                }
+            });
+        }
+
+        return res.status(404).json({ success: false, message: 'El grupo no tiene integrantes' });
     } catch (error) {
         console.error('Error al obtener ciclo y semana:', error);
-
-        return res.status(500).json({
-            success: false,
-            message: 'Error interno del servidor',
-            error: error.message
-        });
+        return res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
     }
 };
 
-
 const getEvaluations = async (req, res) => {
     try {
-        const evaluations = await Evaluation.find().sort({ createdAt: -1 });
+        const evaluations = await Evaluation.find().sort({ createdAt: -1 }).lean();
 
-        // Populate manually since models are on different connection databases
-        const populated = [];
-        for (const item of evaluations) {
-            const itemObj = item.toObject();
-
+        const populated = evaluations.map(itemObj => {
             if (itemObj.datosGenerales) {
-                // Soporte para registros antiguos con grupoId
                 if (itemObj.datosGenerales.grupoId && !itemObj.datosGenerales.grupo) {
-                    try {
-                        const grupo = await Grupo.findById(itemObj.datosGenerales.grupoId);
-                        itemObj.datosGenerales.grupo = grupo ? grupo.nombre : 'Grupo Desconocido';
-                    } catch (err) {
-                        itemObj.datosGenerales.grupo = 'Grupo Desconocido';
-                    }
+                    itemObj.datosGenerales.grupo = 'Grupo Desconocido';
                 }
             }
-            populated.push(itemObj);
-        }
+            return itemObj;
+        });
 
         res.status(200).json({ success: true, data: populated });
     } catch (error) {
@@ -447,7 +496,7 @@ const getEvaluations = async (req, res) => {
     }
 };
 
-// Obtener el asesor asignado a un grupo o cliente específico por ID (mapeado a su nombre real)
+// Obtener el asesor asignado a un grupo o cliente específico por ID (usa caché)
 const getAsesorPorGrupo = async (req, res) => {
     try {
         const { grupoId } = req.params;
@@ -460,10 +509,7 @@ const getAsesorPorGrupo = async (req, res) => {
         }
 
         if (!entidad) {
-            return res.status(404).json({
-                success: false,
-                message: 'Grupo o cliente no encontrado'
-            });
+            return res.status(404).json({ success: false, message: 'Grupo o cliente no encontrado' });
         }
 
         let rawAsesor = entidad.asesor || entidad.evaluadorAsignado || null;
@@ -480,20 +526,16 @@ const getAsesorPorGrupo = async (req, res) => {
         let asesorNombre = rawAsesor ? rawAsesor.toString() : null;
 
         if (rawAsesor) {
-            try {
-                const resp = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/users/users-asesores');
-                if (Array.isArray(resp.data)) {
-                    const foundUser = resp.data.find(u =>
-                        u._id?.toString() === rawAsesor.toString() ||
-                        u.username?.toString() === rawAsesor.toString() ||
-                        u.nombre?.toString() === rawAsesor.toString()
-                    );
-                    if (foundUser) {
-                        asesorNombre = foundUser.nombre || foundUser.username;
-                    }
+            const { data: userList } = await getAsesoresData();
+            if (Array.isArray(userList)) {
+                const foundUser = userList.find(u =>
+                    u._id?.toString() === rawAsesor.toString() ||
+                    u.username?.toString() === rawAsesor.toString() ||
+                    u.nombre?.toString() === rawAsesor.toString()
+                );
+                if (foundUser) {
+                    asesorNombre = foundUser.nombre || foundUser.username;
                 }
-            } catch (err) {
-                console.error('Error al resolver nombre de asesor:', err.message);
             }
         }
 
@@ -506,18 +548,14 @@ const getAsesorPorGrupo = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al obtener asesor:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Error interno del servidor',
-            error: error.message
-        });
+        return res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
     }
 };
 
 const getEvaluationBySucursal = async (req, res) => {
     try {
         const { sucursal } = req.params;
-        const evaluations = await Evaluation.find({ 'datosGenerales.sucursal': sucursal });
+        const evaluations = await Evaluation.find({ 'datosGenerales.sucursal': sucursal }).lean();
         res.status(200).json({ success: true, data: evaluations });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
@@ -527,46 +565,22 @@ const getEvaluationBySucursal = async (req, res) => {
 
 const getClientesMaster = async (req, res) => {
     try {
-        const response = await fetch(
-            'https://servidor-pwa-control-lku5.onrender.com/api/clientes/clientes-master'
-        );
-
-        if (!response.ok) {
-            return res.status(response.status).json({
-                success: false,
-                message: 'Error al consultar el servidor remoto'
-            });
-        }
-
-        const data = await response.json();
-
-        res.status(200).json(data);
-
-    } catch (error) {
-        console.error(error);
-
-        res.status(500).json({
-            success: false,
-            message: 'Error al obtener clientes master',
-            error: error.message
+        const response = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/clientes/clientes-master', {
+            timeout: 10000
         });
+        res.status(200).json(response.data);
+    } catch (error) {
+        console.error('Error al obtener clientes master:', error.message);
+        res.status(500).json({ success: false, message: 'Error al obtener clientes master', error: error.message });
     }
 };
 
-
-
 const getClientesEjecutivas = async (req, res) => {
     try {
-        const response = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/clientes/clientes-master/');
+        const { data: userList } = await getAsesoresData();
         let clientes = [];
-        if (Array.isArray(response.data)) {
-            clientes = response.data
-                .map(u => u.nombre || u.username)
-                .filter(Boolean);
-        } else if (response.data && Array.isArray(response.data.data)) {
-            clientes = response.data.data
-                .map(u => u.nombre || u.username)
-                .filter(Boolean);
+        if (Array.isArray(userList)) {
+            clientes = userList.map(u => u.nombre || u.username).filter(Boolean);
         }
 
         const distinctLocal = await Grupo.distinct('evaluadorAsignado');
@@ -574,7 +588,7 @@ const getClientesEjecutivas = async (req, res) => {
 
         res.status(200).json({ success: true, data: combinados });
     } catch (error) {
-        console.error('Error al obtener clientes remotos:', error.message);
+        console.error('Error al obtener clientes ejecutivas:', error.message);
         try {
             const distinctLocal = await Grupo.distinct('evaluadorAsignado');
             res.status(200).json({ success: true, data: distinctLocal.filter(Boolean) });
@@ -582,8 +596,7 @@ const getClientesEjecutivas = async (req, res) => {
             res.status(500).json({ success: false, message: 'Error al obtener clientes', error: err.message });
         }
     }
-}
-
+};
 
 const getMiembrosGrupoConIndividual = async (req, res) => {
     try {
@@ -597,15 +610,11 @@ const getMiembrosGrupoConIndividual = async (req, res) => {
             url += `?${queryParams.join('&')}`;
         }
 
-        const response = await axios.get(url);
+        const response = await axios.get(url, { timeout: 15000 });
         res.status(200).json(response.data);
     } catch (error) {
         console.error('Error al obtener miembros con crédito individual:', error.message);
-        res.status(500).json({
-            success: false,
-            message: 'Error al comunicarse con la API externa',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Error al comunicarse con la API externa', error: error.message });
     }
 };
 
@@ -624,4 +633,4 @@ module.exports = {
     getClientesEjecutivas,
     getClientesMaster,
     getMiembrosGrupoConIndividual
-}
+};

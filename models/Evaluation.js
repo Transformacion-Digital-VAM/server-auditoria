@@ -167,6 +167,12 @@ const EvaluationSchema = new Schema({
   }
 }, { timestamps: true });
 
+// Índices para acelerar búsquedas y sincronización
+EvaluationSchema.index({ 'datosGenerales.semanaEvaluada': 1, 'datosGenerales.cicloEvaluado': 1, 'datosGenerales.procesoEvaluado': 1 });
+EvaluationSchema.index({ 'datosGenerales.grupo.nombre': 1 });
+EvaluationSchema.index({ 'datosGenerales.asesorEvaluadoNombre': 1 });
+EvaluationSchema.index({ createdAt: -1 });
+
 const EvaluationModel = dbEvaluaciones.model('Evaluation', EvaluationSchema, 'evaluaciones');
 
 module.exports = EvaluationModel;

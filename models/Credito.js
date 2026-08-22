@@ -9,6 +9,8 @@ const CreditoSchema = new Schema({
 }, { strict: false, timestamps: true });
 
 CreditoSchema.index({ miembro: 1, ciclo: 1, tipoCredito: 1 }, { unique: true });
+CreditoSchema.index({ cliente: 1, estado: 1, ciclo: -1 });
+CreditoSchema.index({ miembro: 1, estado: 1, ciclo: -1 });
 
 const CreditoModel = dbControlVam.model('Credito', CreditoSchema, 'creditos');
 

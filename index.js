@@ -3,6 +3,7 @@ require('dotenv').config();
 require('dns').setServers(['8.8.8.8', '8.8.4.4']);
 
 const express = require('express');
+const compression = require('compression');
 const { dbControlVam, dbEvaluaciones } = require('./config/db');
 const Grupo = require('./models/Grupo');
 const Evaluation = require('./models/Evaluation');
@@ -11,6 +12,9 @@ const axios = require("axios");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Middleware de compresión Gzip para reducir ancho de banda hasta un 80-90%
+app.use(compression());
 
 // conectar a la Base de Datos
 dbControlVam;
