@@ -13,7 +13,7 @@ const getAllGrupos = async (req, res) => {
         const coordinacionesMap = new Map();
 
         try {
-            const resp = await axios.get('https://server-auditoria-7fpm.onrender.com/api/users/users-asesores');
+            const resp = await axios.get('https://servidor-pwa-control-lku5.onrender.com//api/users/users-asesores');
             const userList = Array.isArray(resp.data) ? resp.data : (resp.data?.data || []);
             userList.forEach(u => {
                 const nombre = u.nombre || u.username || '';
@@ -172,7 +172,7 @@ const getGrupoById = async (req, res) => {
 // Obtener todos los asesores desde el endpoint remoto de usuarios
 const getAsesores = async (req, res) => {
     try {
-        const response = await axios.get('https://server-auditoria-7fpm.onrender.com/api/users/users-asesores');
+        const response = await axios.get('https://servidor-pwa-control-lku5.onrender.com//api/users/users-asesores');
         let asesores = [];
         if (Array.isArray(response.data)) {
             asesores = response.data
@@ -270,7 +270,7 @@ const createEvaluation = async (req, res) => {
 
         if (targetAsesorName) {
             try {
-                const resp = await axios.get('https://server-auditoria-7fpm.onrender.com/api/users/users-asesores');
+                const resp = await axios.get('https://servidor-pwa-control-lku5.onrender.com//api/users/users-asesores');
                 if (Array.isArray(resp.data)) {
                     const userMatch = resp.data.find(u =>
                         (u.nombre && u.nombre.trim().toLowerCase() === targetAsesorName.trim().toLowerCase()) ||
@@ -481,7 +481,7 @@ const getAsesorPorGrupo = async (req, res) => {
 
         if (rawAsesor) {
             try {
-                const resp = await axios.get('https://server-auditoria-7fpm.onrender.com/api/users/users-asesores');
+                const resp = await axios.get('https://servidor-pwa-control-lku5.onrender.com//api/users/users-asesores');
                 if (Array.isArray(resp.data)) {
                     const foundUser = resp.data.find(u =>
                         u._id?.toString() === rawAsesor.toString() ||
@@ -528,7 +528,7 @@ const getEvaluationBySucursal = async (req, res) => {
 const getClientesMaster = async (req, res) => {
     try {
         const response = await fetch(
-            'https://server-auditoria-7fpm.onrender.com/api/clientes/clientes-master'
+            'https://servidor-pwa-control-lku5.onrender.com//api/clientes/clientes-master'
         );
 
         if (!response.ok) {
@@ -557,7 +557,7 @@ const getClientesMaster = async (req, res) => {
 
 const getClientesEjecutivas = async (req, res) => {
     try {
-        const response = await axios.get('https://server-auditoria-7fpm.onrender.com/api/clientes/clientes-master/');
+        const response = await axios.get('https://servidor-pwa-control-lku5.onrender.com//api/clientes/clientes-master/');
         let clientes = [];
         if (Array.isArray(response.data)) {
             clientes = response.data
@@ -588,7 +588,7 @@ const getClientesEjecutivas = async (req, res) => {
 const getMiembrosGrupoConIndividual = async (req, res) => {
     try {
         const { grupoId, estado } = req.query;
-        let url = 'https://server-auditoria-7fpm.onrender.com/api/clientes/miembros-grupo-con-individual';
+        let url = 'https://servidor-pwa-control-lku5.onrender.com//api/clientes/miembros-grupo-con-individual';
         const queryParams = [];
         if (grupoId) queryParams.push(`grupoId=${grupoId}`);
         if (estado) queryParams.push(`estado=${estado}`);
