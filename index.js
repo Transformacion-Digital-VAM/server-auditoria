@@ -3,6 +3,7 @@ require('dotenv').config();
 require('dns').setServers(['8.8.8.8', '8.8.4.4']);
 
 const express = require('express');
+const cors = require('cors');
 const compression = require('compression');
 const { dbControlVam, dbEvaluaciones } = require('./config/db');
 const Grupo = require('./models/Grupo');
@@ -12,6 +13,9 @@ const axios = require("axios");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Habilitar CORS para permitir peticiones desde cualquier origen
+app.use(cors());
 
 // Middleware de compresión Gzip para reducir ancho de banda hasta un 80-90%
 app.use(compression());
