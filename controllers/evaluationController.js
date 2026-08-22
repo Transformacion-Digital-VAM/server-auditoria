@@ -478,7 +478,12 @@ const getCicloSemanaGrupo = async (req, res) => {
 
 const getEvaluations = async (req, res) => {
     try {
-        const evaluations = await Evaluation.find().sort({ createdAt: -1 }).lean();
+        const includePhotos = req.query.includePhotos === 'true';
+        let query = Evaluation.find().sort({ createdAt: -1 });
+        if (!includePhotos) {
+            query = query.select('-evidenciaFotos');
+        }
+        const evaluations = await query.lean();
 
         const populated = evaluations.map(itemObj => {
             if (itemObj.datosGenerales) {
@@ -493,6 +498,21 @@ const getEvaluations = async (req, res) => {
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
         res.status(500).json({ success: false, message: 'Error al obtener evaluaciones', error: error.message });
+    }
+};
+
+// Obtener una evaluación específica con sus fotos completas
+const getEvaluationById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const evaluation = await Evaluation.findById(id).lean();
+        if (!evaluation) {
+            return res.status(404).json({ success: false, message: 'Evaluación no encontrada' });
+        }
+        res.status(200).json({ success: true, data: evaluation });
+    } catch (error) {
+        console.error('Error al obtener evaluación por ID:', error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
     }
 };
 
@@ -628,6 +648,7 @@ module.exports = {
     getGrupos,
     getCicloSemanaGrupo,
     getEvaluations,
+    getEvaluationById,
     getAllEvaluations,
     getEvaluationBySucursal,
     getClientesEjecutivas,

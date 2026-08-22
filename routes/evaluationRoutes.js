@@ -16,5 +16,6 @@ router.get('/asesores', evaluationController.getAsesores);
 // Rutas de evaluaciones
 router.post('/', evaluationController.createEvaluation);
 router.get('/', evaluationController.getEvaluations);
+router.get('/:id', evaluationController.getEvaluationById);
 
 module.exports = router;
