@@ -6,8 +6,8 @@ const evaluationController = require('../controllers/evaluationController');
 router.get('/grupos/getCicloSemanaGrupo/:grupoId', evaluationController.getCicloSemanaGrupo);
 router.get('/grupos/asesores/grupo/:grupoId', evaluationController.getAsesorPorGrupo);
 router.get('/miembros-grupo-con-individual', evaluationController.getMiembrosGrupoConIndividual);
-router.get('/grupos/:asesor', evaluationController.getGruposPorAsesor);
 router.get('/grupos', evaluationController.getAllGrupos);
+router.get('/grupos/:asesor', evaluationController.getGruposPorAsesor);
 router.get('/grupo/:id', evaluationController.getGrupoById);
 
 // Rutas de asesores
