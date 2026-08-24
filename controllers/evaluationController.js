@@ -420,7 +420,7 @@ const getGrupos = async (req, res) => {
 // Obtener todas las evaluaciones (con soporte para excluir fotos pesadas si se requiere)
 const getAllEvaluations = async (req, res) => {
     try {
-        const includePhotos = req.query.includePhotos === 'true';
+        const includePhotos = req.query.includePhotos !== 'false';
         let query = Evaluation.find().sort({ createdAt: -1 });
         if (!includePhotos) {
             query = query.select('-evidenciaFotos');
@@ -478,7 +478,7 @@ const getCicloSemanaGrupo = async (req, res) => {
 
 const getEvaluations = async (req, res) => {
     try {
-        const includePhotos = req.query.includePhotos === 'true';
+        const includePhotos = req.query.includePhotos !== 'false';
         let query = Evaluation.find().sort({ createdAt: -1 });
         if (!includePhotos) {
             query = query.select('-evidenciaFotos');
