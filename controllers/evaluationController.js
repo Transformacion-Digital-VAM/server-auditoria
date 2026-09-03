@@ -13,12 +13,20 @@ let asesoresCache = {
     expiresAt: 0
 };
 
-const MAX_EVALUATIONS_PER_PAGE = 50;
+const MAX_EVALUATIONS_PER_PAGE = 1000;
 const MAX_PHOTOS_BYTES = 12 * 1024 * 1024;
 
-function getPagination(query) {
+function getPagination(query = {}) {
+    if (query.all === 'true' || query.limit === '0' || query.limit === 'all') {
+        return {
+            page: 1,
+            limit: 0,
+            skip: 0
+        };
+    }
+
     const page = Math.max(Number.parseInt(query.page, 10) || 1, 1);
-    const requestedLimit = Number.parseInt(query.limit, 10) || 20;
+    const requestedLimit = Number.parseInt(query.limit, 10) || 500;
     const limit = Math.min(Math.max(requestedLimit, 1), MAX_EVALUATIONS_PER_PAGE);
 
     return {
@@ -459,7 +467,7 @@ const getAllEvaluations = async (req, res) => {
             success: true,
             count: evaluaciones.length,
             data: evaluaciones,
-            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+            pagination: { page, limit, total, totalPages: limit > 0 ? Math.ceil(total / limit) : 1 }
         });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
@@ -536,7 +544,7 @@ const getEvaluations = async (req, res) => {
         res.status(200).json({
             success: true,
             data: populated,
-            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+            pagination: { page, limit, total, totalPages: limit > 0 ? Math.ceil(total / limit) : 1 }
         });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
@@ -632,7 +640,7 @@ const getEvaluationBySucursal = async (req, res) => {
         res.status(200).json({
             success: true,
             data: evaluations,
-            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+            pagination: { page, limit, total, totalPages: limit > 0 ? Math.ceil(total / limit) : 1 }
         });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
