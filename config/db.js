@@ -22,10 +22,18 @@ require('dotenv').config();
 const masterURI = process.env.MONGO_URI;
 
 // Conexión a la base de datos hojas de control
-const dbControlVam = mongoose.createConnection(`${masterURI}/db_control_vam?retryWrites=true&w=majority`, { family: 4 });
+const connectionOptions = {
+  family: 4,
+  maxPoolSize: 5,
+  minPoolSize: 0,
+  maxIdleTimeMS: 30000,
+  serverSelectionTimeoutMS: 10000
+};
+
+const dbControlVam = mongoose.createConnection(`${masterURI}/db_control_vam?retryWrites=true&w=majority`, connectionOptions);
 
 // Conexión a base de datos auditorias
-const dbEvaluaciones = mongoose.createConnection(`${masterURI}/db_auditoria_vam?retryWrites=true&w=majority`, { family: 4 });
+const dbEvaluaciones = mongoose.createConnection(`${masterURI}/db_auditoria_vam?retryWrites=true&w=majority`, connectionOptions);
 //const dbEvaluaciones = mongoose.createConnection(`${masterURI}/db_test_auditoria?retryWrites=true&w=majority`, { family: 4 });
 
 // confirmar en consola que ambas conectaron con éxito

@@ -13,6 +13,21 @@ let asesoresCache = {
     expiresAt: 0
 };
 
+const MAX_EVALUATIONS_PER_PAGE = 50;
+const MAX_PHOTOS_BYTES = 12 * 1024 * 1024;
+
+function getPagination(query) {
+    const page = Math.max(Number.parseInt(query.page, 10) || 1, 1);
+    const requestedLimit = Number.parseInt(query.limit, 10) || 20;
+    const limit = Math.min(Math.max(requestedLimit, 1), MAX_EVALUATIONS_PER_PAGE);
+
+    return {
+        page,
+        limit,
+        skip: (page - 1) * limit
+    };
+}
+
 async function getAsesoresData() {
     const now = Date.now();
     if (asesoresCache.data && now < asesoresCache.expiresAt) {
@@ -64,8 +79,8 @@ const getAllGrupos = async (req, res) => {
 
         // 1. Obtener grupos y clientes en paralelo (2 consultas)
         const [grupos, clientes] = await Promise.all([
-            Grupo.find().lean(),
-            Cliente.find().lean()
+            Grupo.find().select('nombre semanaActual cicloActual evaluadorAsignado integrantes asesor coordinacion coordinacionNombre').lean(),
+            Cliente.find().select('nombre semanaActual cicloActual evaluadorAsignado asesor coordinacion coordinacionNombre').lean()
         ]);
 
         // 2. Extraer IDs de integrantes y clientes para consultar créditos en lote
@@ -90,7 +105,10 @@ const getAllGrupos = async (req, res) => {
 
         let creditos = [];
         if (creditQueries.length > 0) {
-            creditos = await Credito.find({ $or: creditQueries }).sort({ ciclo: -1 }).lean();
+            creditos = await Credito.find({ $or: creditQueries })
+                .select('miembro cliente ciclo semanaActual estado asesor evaluadorAsignado coordinacion coordinacionNombre')
+                .sort({ ciclo: -1 })
+                .lean();
         }
 
         // 4. Indexar créditos en Mapas en memoria para acceso O(1)
@@ -308,6 +326,12 @@ const createEvaluation = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Debe proporcionar de 1 a 4 fotos como evidencia de la evaluación.' });
         }
 
+        const fotosBytes = evaluationData.evidenciaFotos.reduce((total, foto) =>
+            total + (typeof foto === 'string' ? Buffer.byteLength(foto, 'utf8') : 0), 0);
+        if (fotosBytes > MAX_PHOTOS_BYTES) {
+            return res.status(413).json({ success: false, message: 'El tamaño total de las fotos no puede superar 12 MB.' });
+        }
+
         // ── 1. Determinar grupoId / clienteId ──────────────────────────────
         let grupoObj = { grupoId: null, nombre: grupoNombreStr };
         let clienteIndividualObj = { clienteId: null, nombre: '' };
@@ -420,13 +444,23 @@ const getGrupos = async (req, res) => {
 // Obtener todas las evaluaciones (con soporte para excluir fotos pesadas si se requiere)
 const getAllEvaluations = async (req, res) => {
     try {
-        const includePhotos = req.query.includePhotos !== 'false';
-        let query = Evaluation.find().sort({ createdAt: -1 });
-        if (!includePhotos) {
-            query = query.select('-evidenciaFotos');
-        }
-        const evaluaciones = await query.lean();
-        res.status(200).json({ success: true, count: evaluaciones.length, data: evaluaciones });
+        const { page, limit, skip } = getPagination(req.query);
+        const filter = {};
+        const [evaluaciones, total] = await Promise.all([
+            Evaluation.find(filter)
+                .select('-evidenciaFotos')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Evaluation.countDocuments(filter)
+        ]);
+        res.status(200).json({
+            success: true,
+            count: evaluaciones.length,
+            data: evaluaciones,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+        });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
         res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
@@ -442,7 +476,7 @@ const getCicloSemanaGrupo = async (req, res) => {
             return res.status(404).json({ success: false, message: 'El grupo no existe' });
         }
 
-        if (!grupo.integrantes || grupo.integrantes.length > 0) {
+        if (grupo.integrantes && grupo.integrantes.length > 0) {
             const primerMiembro = grupo.integrantes[0];
             const credito = await Credito.findOne({ miembro: primerMiembro, estado: 'Activo' })
                 .sort({ ciclo: -1 })
@@ -478,12 +512,17 @@ const getCicloSemanaGrupo = async (req, res) => {
 
 const getEvaluations = async (req, res) => {
     try {
-        const includePhotos = req.query.includePhotos !== 'false';
-        let query = Evaluation.find().sort({ createdAt: -1 });
-        if (!includePhotos) {
-            query = query.select('-evidenciaFotos');
-        }
-        const evaluations = await query.lean();
+        const { page, limit, skip } = getPagination(req.query);
+        const filter = {};
+        const [evaluations, total] = await Promise.all([
+            Evaluation.find(filter)
+                .select('-evidenciaFotos')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Evaluation.countDocuments(filter)
+        ]);
 
         const populated = evaluations.map(itemObj => {
             if (itemObj.datosGenerales) {
@@ -494,7 +533,11 @@ const getEvaluations = async (req, res) => {
             return itemObj;
         });
 
-        res.status(200).json({ success: true, data: populated });
+        res.status(200).json({
+            success: true,
+            data: populated,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+        });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
         res.status(500).json({ success: false, message: 'Error al obtener evaluaciones', error: error.message });
@@ -575,8 +618,22 @@ const getAsesorPorGrupo = async (req, res) => {
 const getEvaluationBySucursal = async (req, res) => {
     try {
         const { sucursal } = req.params;
-        const evaluations = await Evaluation.find({ 'datosGenerales.sucursal': sucursal }).lean();
-        res.status(200).json({ success: true, data: evaluations });
+        const { page, limit, skip } = getPagination(req.query);
+        const filter = { 'datosGenerales.sucursal': sucursal };
+        const [evaluations, total] = await Promise.all([
+            Evaluation.find(filter)
+                .select('-evidenciaFotos')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Evaluation.countDocuments(filter)
+        ]);
+        res.status(200).json({
+            success: true,
+            data: evaluations,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+        });
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
         res.status(500).json({ success: false, message: 'Error al obtener evaluaciones', error: error.message });

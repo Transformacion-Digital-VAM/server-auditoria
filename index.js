@@ -24,8 +24,8 @@ app.use(compression());
 dbControlVam;
 dbEvaluaciones;
 
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ limit: '20mb', extended: true }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
 async function obtenerCicloSemana(grupoId) {
   try {
