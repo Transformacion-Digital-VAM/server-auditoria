@@ -449,18 +449,29 @@ const getGrupos = async (req, res) => {
     }
 };
 
-// Obtener todas las evaluaciones (con soporte para excluir fotos pesadas si se requiere)
+// Obtener todas las evaluaciones (con soporte para excluir fotos pesadas y calcular cantidadFotos)
 const getAllEvaluations = async (req, res) => {
     try {
         const { page, limit, skip } = getPagination(req.query);
         const filter = {};
+        const pipeline = [
+            { $match: filter },
+            { $sort: { createdAt: -1 } },
+            ...(skip > 0 ? [{ $skip: skip }] : []),
+            ...(limit > 0 ? [{ $limit: limit }] : []),
+            {
+                $addFields: {
+                    cantidadFotos: { $size: { $ifNull: ['$evidenciaFotos', []] } }
+                }
+            },
+            {
+                $project: {
+                    evidenciaFotos: 0
+                }
+            }
+        ];
         const [evaluaciones, total] = await Promise.all([
-            Evaluation.find(filter)
-                .select('-evidenciaFotos')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit)
-                .lean(),
+            Evaluation.aggregate(pipeline),
             Evaluation.countDocuments(filter)
         ]);
         res.status(200).json({
@@ -522,13 +533,24 @@ const getEvaluations = async (req, res) => {
     try {
         const { page, limit, skip } = getPagination(req.query);
         const filter = {};
+        const pipeline = [
+            { $match: filter },
+            { $sort: { createdAt: -1 } },
+            ...(skip > 0 ? [{ $skip: skip }] : []),
+            ...(limit > 0 ? [{ $limit: limit }] : []),
+            {
+                $addFields: {
+                    cantidadFotos: { $size: { $ifNull: ['$evidenciaFotos', []] } }
+                }
+            },
+            {
+                $project: {
+                    evidenciaFotos: 0
+                }
+            }
+        ];
         const [evaluations, total] = await Promise.all([
-            Evaluation.find(filter)
-                .select('-evidenciaFotos')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit)
-                .lean(),
+            Evaluation.aggregate(pipeline),
             Evaluation.countDocuments(filter)
         ]);
 
@@ -549,6 +571,24 @@ const getEvaluations = async (req, res) => {
     } catch (error) {
         console.error('Error al obtener evaluaciones:', error);
         res.status(500).json({ success: false, message: 'Error al obtener evaluaciones', error: error.message });
+    }
+};
+
+// Obtener únicamente las fotos de una evaluación específica (bajo demanda)
+const getEvaluationPhotos = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const evaluation = await Evaluation.findById(id).select('evidenciaFotos').lean();
+        if (!evaluation) {
+            return res.status(404).json({ success: false, message: 'Evaluación no encontrada' });
+        }
+        res.status(200).json({
+            success: true,
+            data: evaluation.evidenciaFotos || []
+        });
+    } catch (error) {
+        console.error('Error al obtener fotos de evaluación:', error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
     }
 };
 
@@ -650,10 +690,52 @@ const getEvaluationBySucursal = async (req, res) => {
 
 const getClientesMaster = async (req, res) => {
     try {
+        const { asesoresMap, coordinacionesMap } = await getAsesoresData();
         const response = await axios.get('https://servidor-pwa-control-lku5.onrender.com/api/clientes/clientes-master', {
             timeout: 10000
         });
-        res.status(200).json(response.data);
+        const rawData = response.data;
+        const rawList = Array.isArray(rawData) ? rawData : (rawData?.data || []);
+
+        // Consultar créditos de estos clientes para obtener ciclo y semana
+        const clientIds = rawList.map(c => c._id).filter(Boolean);
+        const creditos = await Credito.find({ cliente: { $in: clientIds } }).sort({ ciclo: -1 }).lean();
+        const creditosPorCliente = new Map();
+        creditos.forEach(cr => {
+            const cId = cr.cliente?.toString();
+            if (cId && !creditosPorCliente.has(cId)) {
+                creditosPorCliente.set(cId, cr);
+            }
+        });
+
+        const clientesFormateados = rawList.map(c => {
+            const cId = c._id?.toString();
+            const credito = creditosPorCliente.get(cId);
+
+            const rawAsesor = (c.asesor && typeof c.asesor === 'object')
+                ? (c.asesor.nombre || c.asesor.username || '')
+                : (c.asesor?.toString() || credito?.asesor?.toString() || '');
+            const asesorNombre = asesoresMap.get(rawAsesor) || rawAsesor;
+            const coordNombre = coordinacionesMap.get(rawAsesor) || coordinacionesMap.get(asesorNombre) || '';
+
+            return {
+                _id: c._id,
+                id: c._id,
+                nombre: c.nombre || '',
+                semanaActual: credito?.semanaActual?.toString() || '',
+                cicloActual: credito?.ciclo?.toString() || '',
+                evaluadorAsignado: asesorNombre,
+                asesor: asesorNombre,
+                coordinacion: coordNombre,
+                coordinacionNombre: coordNombre,
+                tipo: 'cliente',
+                horaVisita: c.horaVisita || '',
+                diaPago: c.diaPago || '',
+                tipoPago: c.tipoPago || ''
+            };
+        });
+
+        res.status(200).json({ success: true, data: clientesFormateados });
     } catch (error) {
         console.error('Error al obtener clientes master:', error.message);
         res.status(500).json({ success: false, message: 'Error al obtener clientes master', error: error.message });
@@ -714,6 +796,7 @@ module.exports = {
     getCicloSemanaGrupo,
     getEvaluations,
     getEvaluationById,
+    getEvaluationPhotos,
     getAllEvaluations,
     getEvaluationBySucursal,
     getClientesEjecutivas,

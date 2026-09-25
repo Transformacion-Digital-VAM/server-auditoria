@@ -16,6 +16,8 @@ router.get('/asesores', evaluationController.getAsesores);
 // Rutas de evaluaciones
 router.post('/', evaluationController.createEvaluation);
 router.get('/', evaluationController.getEvaluations);
+router.get('/clientes-master', evaluationController.getClientesMaster);
+router.get('/:id/fotos', evaluationController.getEvaluationPhotos);
 router.get('/:id', evaluationController.getEvaluationById);
 
 module.exports = router;

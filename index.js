@@ -9,6 +9,7 @@ const { dbControlVam, dbEvaluaciones } = require('./config/db');
 const Grupo = require('./models/Grupo');
 const Evaluation = require('./models/Evaluation');
 const axios = require("axios");
+const coordinacionRoutes = require('./routes/coordinacionRoutes');
 
 
 const app = express();
@@ -54,6 +55,7 @@ async function obtenerUsuarios(usuarioId) {
 
 const evaluationRoutes = require('./routes/evaluationRoutes');
 app.use('/api/evaluaciones', evaluationRoutes);
+app.use('/api/coordinacion', coordinacionRoutes);
 
 // Ruta base
 app.get('/', (req, res) => {

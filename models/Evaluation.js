@@ -89,14 +89,31 @@ const EvaluationSchema = new Schema({
     fichaCerrada: { type: String, enum: NivelEnum },
     registroHojaControl: { type: String, enum: NivelEnum },
     cotejoHojaControl: { type: String, enum: NivelEnum },
+    cotejoHojaControlTesoreraControlInterno: { type: String, enum: NivelEnum },
+    cotejoHojaControlTesoreraRecibos: { type: String, enum: NivelEnum },
+    cotejoHojaControlTesoreraAhorros: { type: String, enum: NivelEnum },
     recibos: { type: String, enum: NivelEnum },
     montoEfectivo: { type: Number, default: 0 },
     montoTransferencia: { type: Number, default: 0 },
     montoDeposito: { type: Number, default: 0 },
     hayCargosAjustes: { type: Boolean, default: false },
-    observaciones: { type: String, default: "" }
+    observacionesRecuperacion: { type: String, default: "" },
+    observacionesRenovacion: { type: String, default: "" },
+    observacionesDesembolso: { type: String, default: "" },
+    observacionesCobranza: { type: String, default: "" }
   },
 
+  recuperacionIndividuales: {
+    recuperacionPactadoInd: { type: String, enum: NivelEnum },
+    fichaCerradaInd: { type: String, enum: NivelEnum },
+    registroHojaControlInd: { type: String, enum: NivelEnum },
+    recibosInd: { type: String, enum: NivelEnum },
+    montoEfectivoInd: { type: Number, default: 0 },
+    montoTransferenciaInd: { type: Number, default: 0 },
+    montoDepositoInd: { type: Number, default: 0 },
+    montoTarjeta: { type: Number, default: 0 },
+    moratoriosInd: { type: String, enum: NivelEnum }
+  },
   cargosAjustes: {
     grupoRealizoSolidarios: { type: Boolean, default: false },
     grupoGeneroMultas: { type: Boolean, default: false },
