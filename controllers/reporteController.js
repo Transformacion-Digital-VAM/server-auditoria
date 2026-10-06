@@ -123,6 +123,15 @@ function calcularPorcentaje(ev) {
 
 // ── Extracción de observaciones de una evaluación ─────────────────────────
 
+function extraerNombreGrupo(dg) {
+    if (!dg) return 'Sin nombre';
+    if (typeof dg.grupo === 'string' && dg.grupo.trim()) return dg.grupo.trim();
+    if (dg.grupo?.nombre && dg.grupo.nombre.trim()) return dg.grupo.nombre.trim();
+    if (typeof dg.clienteIndividual === 'string' && dg.clienteIndividual.trim()) return dg.clienteIndividual.trim();
+    if (dg.clienteIndividual?.nombre && dg.clienteIndividual.nombre.trim()) return dg.clienteIndividual.nombre.trim();
+    return 'Sin nombre';
+}
+
 /**
  * Devuelve el texto de observaciones/incidencias de una evaluación.
  * Prioriza campos más específicos y no repite el mismo texto.
@@ -310,22 +319,45 @@ const generarReporte = async (req, res) => {
         const totalGrupos         = gruposSet.size;
         const totalEvaluaciones   = evaluaciones.length;
 
-        // ── 2. Resultados por ASEC con detalle por grupo ──────────────────
+        // ── 2. Resultados por ASEC con detalle por grupo y listado de grupos ──
         const porAsesor = {};
+        const gruposEvaluados = [];
 
         for (const ev of evsASEC) {
-            const nombre = ev.datosGenerales?.asesorEvaluadoNombre || 'Sin nombre';
-            const coord  = ev.datosGenerales?.coordinacionNombre   || '';
+            const dg     = ev.datosGenerales || {};
+            const nombre = dg.asesorEvaluadoNombre || 'Sin nombre';
+            const coord  = dg.coordinacionNombre   || 'Sin coordinación';
             const pct    = calcularPorcentaje(ev);
-            const grupo  = ev.datosGenerales?.grupo?.nombre || ev.datosGenerales?.clienteIndividual?.nombre || '';
+            const grupo  = extraerNombreGrupo(dg);
             const obs    = extraerObservacion(ev);
-            const proc   = ev.datosGenerales?.procesoEvaluado || '';
+            const proc   = dg.procesoEvaluado || '';
+            const semana = dg.semanaEvaluada || '';
+            const ciclo  = dg.cicloEvaluado || '';
+            const fecha  = dg.fechaEvaluacion;
 
             if (!porAsesor[nombre]) {
                 porAsesor[nombre] = { nombre, coord, pcts: [], grupos: [] };
             }
             porAsesor[nombre].pcts.push(pct);
-            porAsesor[nombre].grupos.push({ nombre: grupo, obs, proceso: proc, pct });
+            porAsesor[nombre].grupos.push({ nombre: grupo, obs, proceso: proc, pct, semana, ciclo });
+
+            gruposEvaluados.push({
+                nombre,
+                coord,
+                grupo,
+                proc,
+                semana,
+                ciclo,
+                fecha,
+                pct,
+                promedio: pct,
+                nivel: nivelTexto(pct),
+                badgeClase: nivelClase(pct),
+                barClase: barClase(pct),
+                color: nivelColor(pct),
+                cumpleMeta: pct >= META,
+                obs
+            });
         }
 
         const asecResultados = Object.values(porAsesor).map(a => {
@@ -413,17 +445,54 @@ const generarReporte = async (req, res) => {
         // SVG dona
         const svgDona = generarDonaFull(pctCumplimiento);
 
-        // Tabla resumen ASEC (página 1)
+        // Tabla resumen ASEC (página 1) - incluye los grupos evaluados y sus notas
         const filasAsec = asecResultados.map(a => `
             <tr>
-                <td><strong>${escapeHtml(a.nombre.toUpperCase())}</strong></td>
+                <td>
+                    <div style="font-weight:700;font-size:11px;">${escapeHtml(a.nombre.toUpperCase())}</div>
+                    <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">
+                        ${a.grupos.map(g => `
+                            <span style="font-size:8px;background:var(--bg-soft);border:1px solid var(--border);border-radius:3px;padding:1px 5px;display:inline-flex;align-items:center;gap:4px;">
+                                <span style="font-weight:600;color:var(--navy);">${escapeHtml(g.nombre || 'G. S/N')}</span>
+                                <span style="color:${nivelColor(g.pct)};font-weight:800;">${g.pct}%</span>
+                            </span>
+                        `).join('')}
+                    </div>
+                </td>
                 <td>${escapeHtml(a.coord.toUpperCase())}</td>
                 <td class="text-center">${a.totalEvaluaciones}</td>
-                <td class="text-center" style="font-weight:700;color:${a.color};">${a.promedio}%</td>
+                <td class="text-center" style="font-weight:800;color:${a.color};font-size:12px;">${a.promedio}%</td>
                 <td class="text-center"><span class="badge ${a.badgeClase}">${a.nivel}</span></td>
                 <td class="text-center">
                     <span class="badge ${a.cumpleMeta ? 'badge-success' : 'badge-danger'}">
                         ${a.cumpleMeta ? 'SI' : 'NO'}
+                    </span>
+                </td>
+            </tr>`).join('');
+
+        // Tabla detallada de todos los Grupos Auditados (página 2)
+        gruposEvaluados.sort((a, b) => b.pct - a.pct);
+
+        const filasGrupos = gruposEvaluados.map((g, idx) => `
+            <tr>
+                <td class="text-center" style="color:var(--muted);font-weight:600;font-size:9px;">${idx + 1}</td>
+                <td><strong>${escapeHtml(g.grupo.toUpperCase())}</strong></td>
+                <td>${escapeHtml(g.nombre.toUpperCase())}</td>
+                <td>${escapeHtml(g.coord.toUpperCase())}</td>
+                <td><span class="badge badge-info">${escapeHtml(g.proc || 'N/A')}</span></td>
+                <td class="text-center" style="font-size:9px;color:var(--slate);">${escapeHtml(g.semana ? `S${g.semana}` : '-')}${g.ciclo ? ` / C${g.ciclo}` : ''}</td>
+                <td class="text-center">
+                    <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <div style="width:34px;height:5px;background:var(--border);border-radius:10px;overflow:hidden;">
+                            <div style="width:${g.pct}%;height:100%;background:${g.color};border-radius:10px;"></div>
+                        </div>
+                        <span style="font-weight:800;color:${g.color};font-size:11px;">${g.pct}%</span>
+                    </div>
+                </td>
+                <td class="text-center"><span class="badge ${g.badgeClase}">${g.nivel}</span></td>
+                <td class="text-center">
+                    <span class="badge ${g.cumpleMeta ? 'badge-success' : 'badge-danger'}">
+                        ${g.cumpleMeta ? 'SI' : 'NO'}
                     </span>
                 </td>
             </tr>`).join('');
@@ -502,24 +571,25 @@ const generarReporte = async (req, res) => {
             if (gruposConObs.length > 0) {
                 contenido += gruposConObs.map(g => `
                     <div class="grupo-inc-item">
-                        ${g.nombre ? `<div class="grupo-inc-nombre">
-                            <span class="grupo-tag">G.</span> ${escapeHtml(g.nombre)}
+                        <div class="grupo-inc-nombre">
+                            <span class="grupo-tag">G.</span> ${escapeHtml(g.nombre || 'Sin nombre')}
                             ${g.proceso ? `<span class="proceso-tag">${escapeHtml(g.proceso)}</span>` : ''}
-                        </div>` : ''}
+                            <span class="badge ${nivelClase(g.pct)}" style="margin-left:auto;font-size:8.5px;font-weight:700;">Calificación: ${g.pct}% · ${nivelTexto(g.pct)}</span>
+                        </div>
                         <div class="grupo-inc-obs">${escapeHtml(g.obs)}</div>
                     </div>`).join('');
             }
 
-            if (gruposSinObs.length > 0 && gruposConObs.length === 0) {
-                contenido = `<div class="no-incidents">No se identificaron incidencias relevantes durante el periodo evaluado.</div>`;
-            } else if (gruposSinObs.length > 0) {
-                const nombresLimpios = gruposSinObs
-                    .filter(g => g.nombre)
-                    .map(g => escapeHtml(g.nombre))
-                    .join(', ');
-                if (nombresLimpios) {
-                    contenido += `<div class="grupos-sin-obs">Sin incidencias: ${nombresLimpios}</div>`;
-                }
+            if (gruposSinObs.length > 0) {
+                contenido += gruposSinObs.map(g => `
+                    <div class="grupo-inc-item" style="border-left-color: #16a34a;">
+                        <div class="grupo-inc-nombre">
+                            <span class="grupo-tag" style="background:#16a34a;">G.</span> ${escapeHtml(g.nombre || 'Sin nombre')}
+                            ${g.proceso ? `<span class="proceso-tag">${escapeHtml(g.proceso)}</span>` : ''}
+                            <span class="badge ${nivelClase(g.pct)}" style="margin-left:auto;font-size:8.5px;font-weight:700;">Calificación: ${g.pct}% · ${nivelTexto(g.pct)}</span>
+                        </div>
+                        <div class="grupo-inc-obs" style="color:var(--muted);font-style:italic;">Sin incidencias reportadas. Cumplimiento dentro de los estándares.</div>
+                    </div>`).join('');
             }
 
             if (!contenido) {
@@ -627,6 +697,7 @@ const generarReporte = async (req, res) => {
             PROCESOS_TEXTO:           procesosTexto,
             COP_COUNT:                copList.length,
             FILAS_ASEC:               filasAsec,
+            FILAS_GRUPOS:             filasGrupos,
             BARRAS_DESEMPENO:         barrasDesempeno,
             TARJETAS_PROCESOS:        tarjetasProcesos,
             FILAS_PROCESOS:           filasProcesos,

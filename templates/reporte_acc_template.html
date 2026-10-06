@@ -45,10 +45,9 @@
             padding: 0;
             page-break-after: always;
             position: relative;
-            overflow: hidden;
         }
         .page:last-child { page-break-after: auto; }
-        .page-body { padding: 12mm 14mm 24px; }
+        .page-body { padding: 12mm 14mm 32px; }
 
         /* ── ENCABEZADOS ────────────────────────────────────── */
         .page-header {
@@ -393,7 +392,51 @@
 
 
 <!-- ═══════════════════════════════════════════════════════
-     PÁGINA 2 — DESEMPEÑO Y PROCESOS
+     PÁGINA 2 — GRUPOS AUDITADOS Y CALIFICACIÓN
+═══════════════════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Grupos auditados y calificación obtenida</div>
+        <div class="phi-period">{{PERIODO_CORTO}}</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 35px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#0891b2;"></span> Detalle de grupos auditados</div>
+            <div class="section-desc">Listado detallado de cada grupo evaluado con su asesor asignado, coordinación, proceso y calificación porcentual obtenida (Meta mínima: {{META}}%).</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width:28px;">#</th>
+                        <th>Grupo / Cliente</th>
+                        <th>Asesor (ASEC)</th>
+                        <th>Coordinación</th>
+                        <th>Proceso</th>
+                        <th class="text-center" style="width:75px;">Sem / Ciclo</th>
+                        <th class="text-center" style="width:90px;">Calificación</th>
+                        <th class="text-center" style="width:70px;">Nivel</th>
+                        <th class="text-center" style="width:65px;">Meta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{FILAS_GRUPOS}}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Grupos auditados</span>
+        <span>Periodo: {{PERIODO_CORTO}}</span>
+    </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 3 — DESEMPEÑO Y PROCESOS
 ═══════════════════════════════════════════════════════ -->
 <section class="page">
 
@@ -445,7 +488,7 @@
 
 
 <!-- ═══════════════════════════════════════════════════════
-     PÁGINA 3 — PARÁMETROS
+     PÁGINA 4 — PARÁMETROS
 ═══════════════════════════════════════════════════════ -->
 <section class="page">
 
@@ -472,7 +515,7 @@
 
 
 <!-- ═══════════════════════════════════════════════════════
-     PÁGINA 4 — INCIDENCIAS POR ASESOR Y GRUPO
+     PÁGINA 5 — INCIDENCIAS POR ASESOR Y GRUPO
 ═══════════════════════════════════════════════════════ -->
 <section class="page">
 
@@ -507,7 +550,7 @@
 
 
 <!-- ═══════════════════════════════════════════════════════
-     PÁGINA 5 — CONCLUSIONES
+     PÁGINA 6 — CONCLUSIONES
 ═══════════════════════════════════════════════════════ -->
 <section class="page">
 
