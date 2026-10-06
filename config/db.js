@@ -33,8 +33,8 @@ const connectionOptions = {
 const dbControlVam = mongoose.createConnection(`${masterURI}/db_control_vam?retryWrites=true&w=majority`, connectionOptions);
 
 // Conexión a base de datos auditorias
-const dbEvaluaciones = mongoose.createConnection(`${masterURI}/db_auditoria_vam?retryWrites=true&w=majority`, connectionOptions);
-//const dbEvaluaciones = mongoose.createConnection(`${masterURI}/db_test_auditoria?retryWrites=true&w=majority`, { family: 4 });
+//const dbEvaluaciones = mongoose.createConnection(`${masterURI}/db_auditoria_vam?retryWrites=true&w=majority`, connectionOptions);
+const dbEvaluaciones = mongoose.createConnection(`${masterURI}/db_test_auditoria?retryWrites=true&w=majority`, { family: 4 });
 
 // confirmar en consola que ambas conectaron con éxito
 dbControlVam.on('connected', () => console.log('Conectado con éxito a: db_control_vam'));

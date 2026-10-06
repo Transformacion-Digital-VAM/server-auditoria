@@ -319,6 +319,10 @@ const createEvaluation = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El nombre del evaluador es obligatorio en datosGenerales' });
         }
 
+        const isEjecutiva = evaluationData.tipoAuditoria === 'Ejecutiva' ||
+            evaluationData.datosGenerales?.procesoEvaluado === 'Procesos de Ejecutivas' ||
+            evaluationData.datosGenerales?.procesoEvaluado === 'Ejecutiva';
+
         let rawGrupo = evaluationData.datosGenerales.grupo;
         let grupoNombreStr = typeof rawGrupo === 'object' ? (rawGrupo.nombre || '') : (rawGrupo || '');
 
@@ -326,18 +330,24 @@ const createEvaluation = async (req, res) => {
             grupoNombreStr = evaluationData.datosGenerales.clienteIndividual.nombre;
         }
 
+        if (isEjecutiva && !grupoNombreStr) {
+            grupoNombreStr = evaluationData.datosGenerales.asesorEvaluadoNombre || 'Ejecutiva';
+        }
+
         if (!grupoNombreStr) {
             return res.status(400).json({ success: false, message: 'El nombre del grupo o cliente es obligatorio en datosGenerales' });
         }
 
-        if (!evaluationData.evidenciaFotos || !Array.isArray(evaluationData.evidenciaFotos) || evaluationData.evidenciaFotos.length < 1 || evaluationData.evidenciaFotos.length > 4) {
-            return res.status(400).json({ success: false, message: 'Debe proporcionar de 1 a 4 fotos como evidencia de la evaluación.' });
-        }
+        if (!isEjecutiva) {
+            if (!evaluationData.evidenciaFotos || !Array.isArray(evaluationData.evidenciaFotos) || evaluationData.evidenciaFotos.length < 1 || evaluationData.evidenciaFotos.length > 4) {
+                return res.status(400).json({ success: false, message: 'Debe proporcionar de 1 a 4 fotos como evidencia de la evaluación.' });
+            }
 
-        const fotosBytes = evaluationData.evidenciaFotos.reduce((total, foto) =>
-            total + (typeof foto === 'string' ? Buffer.byteLength(foto, 'utf8') : 0), 0);
-        if (fotosBytes > MAX_PHOTOS_BYTES) {
-            return res.status(413).json({ success: false, message: 'El tamaño total de las fotos no puede superar 12 MB.' });
+            const fotosBytes = evaluationData.evidenciaFotos.reduce((total, foto) =>
+                total + (typeof foto === 'string' ? Buffer.byteLength(foto, 'utf8') : 0), 0);
+            if (fotosBytes > MAX_PHOTOS_BYTES) {
+                return res.status(413).json({ success: false, message: 'El tamaño total de las fotos no puede superar 12 MB.' });
+            }
         }
 
         // ── 1. Determinar grupoId / clienteId ──────────────────────────────
@@ -400,6 +410,52 @@ const createEvaluation = async (req, res) => {
                     }
                 }
             }
+        }
+
+        // ── Normalización de observaciones y campos clave para que nunca se pierdan ──
+        if (evaluationData.recuperacion) {
+            const obs = evaluationData.recuperacion.observacionesRecuperacion ||
+                evaluationData.recuperacion.observaciones || '';
+            evaluationData.recuperacion.observacionesRecuperacion = obs;
+            evaluationData.recuperacion.observaciones = obs;
+        }
+
+        if (evaluationData.renovacion) {
+            const obs = evaluationData.renovacion.observacionesRenovacion ||
+                evaluationData.renovacion.observaciones || '';
+            evaluationData.renovacion.observacionesRenovacion = obs;
+            evaluationData.renovacion.observaciones = obs;
+        }
+
+        if (evaluationData.cobranza) {
+            const obs = evaluationData.cobranza.observacionesCobranza ||
+                evaluationData.cobranza.observaciones || '';
+            evaluationData.cobranza.observacionesCobranza = obs;
+            evaluationData.cobranza.observaciones = obs;
+
+            const est = evaluationData.cobranza.estrategiasASEC || evaluationData.cobranza.estrategiasAsec;
+            if (est) {
+                evaluationData.cobranza.estrategiasASEC = est;
+                evaluationData.cobranza.estrategiasAsec = est;
+            }
+        }
+
+        if (evaluationData.desembolsoCredito) {
+            const obs = evaluationData.desembolsoCredito.observacionesDesembolso ||
+                evaluationData.desembolsoCredito.actividadesPrevias?.observacionesDesembolso ||
+                evaluationData.desembolsoCredito.observaciones || '';
+            evaluationData.desembolsoCredito.observacionesDesembolso = obs;
+            evaluationData.desembolsoCredito.observaciones = obs;
+        }
+
+        if (evaluationData.cierreCiclo) {
+            const inc = evaluationData.cierreCiclo.incidenciasCierre ||
+                evaluationData.cierreCiclo.incidencias || '';
+            evaluationData.cierreCiclo.incidenciasCierre = inc;
+            evaluationData.cierreCiclo.incidencias = inc;
+
+            const obs = evaluationData.cierreCiclo.observaciones || inc;
+            evaluationData.cierreCiclo.observaciones = obs;
         }
 
         const filter = {

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const evaluationController = require('../controllers/evaluationController');
+const { generarReporte } = require('../controllers/reporteController');
 
 // Rutas de grupos (más específicas primero)
 router.get('/grupos/getCicloSemanaGrupo/:grupoId', evaluationController.getCicloSemanaGrupo);
@@ -17,6 +18,7 @@ router.get('/asesores', evaluationController.getAsesores);
 router.post('/', evaluationController.createEvaluation);
 router.get('/', evaluationController.getEvaluations);
 router.get('/clientes-master', evaluationController.getClientesMaster);
+router.get('/reporte', generarReporte);
 router.get('/:id/fotos', evaluationController.getEvaluationPhotos);
 router.get('/:id', evaluationController.getEvaluationById);
 

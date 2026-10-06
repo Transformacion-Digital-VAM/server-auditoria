@@ -13,7 +13,7 @@ const coordinacionRoutes = require('./routes/coordinacionRoutes');
 
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3200;
 
 // Habilitar CORS para permitir peticiones desde cualquier origen
 app.use(cors());

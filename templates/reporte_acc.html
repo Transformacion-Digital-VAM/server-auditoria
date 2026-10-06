@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reporte de Evaluaciones — Ejemplo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --navy:     #0f172a;
+            --navy-mid: #1e293b;
+            --slate:    #334155;
+            --muted:    #64748b;
+            --border:   #e2e8f0;
+            --bg-soft:  #f8fafc;
+            --green:    #16a34a;  --green-bg: #dcfce7;
+            --amber:    #b45309;  --amber-bg: #fef3c7;
+            --red:      #dc2626;  --red-bg:   #fee2e2;
+            --accent:   #1d4ed8;  --accent-lt: #dbeafe;
+            --violet:   #7c3aed;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #e5e7eb;
+            color: var(--navy);
+            font-family: 'Inter', Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.5;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .report  { width: 210mm; margin: 0 auto; }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            background: #fff;
+            padding: 0;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+        }
+        .page:last-child { page-break-after: auto; }
+        .page-body { padding: 12mm 14mm 24px; }
+
+        /* encabezados */
+        .page-header {
+            background: var(--navy);
+            padding: 16px 18px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .ph-left h1 { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+        .ph-left .ph-sub { font-size: 10px; color: #94a3b8; margin-top: 3px; }
+        .ph-left .ph-sub strong { color: #cbd5e1; }
+        .ph-right { text-align: right; font-size: 9px; color: #64748b; line-height: 1.7; }
+        .ph-right strong { color: #94a3b8; }
+
+        .page-header-inner {
+            background: var(--navy);
+            padding: 10px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .phi-title { font-size: 12px; font-weight: 700; color: #fff; }
+        .phi-period { font-size: 9px; color: #94a3b8; }
+
+        /* secciones */
+        .section { margin-bottom: 16px; }
+        .section-title {
+            font-size: 12px; font-weight: 700; color: var(--navy);
+            margin-bottom: 9px; padding-bottom: 5px;
+            border-bottom: 2px solid var(--navy);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .section-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+        .section-desc { font-size: 9px; color: var(--muted); margin-bottom: 9px; margin-top: -3px; }
+
+        /* narrativo */
+        .narrative {
+            background: var(--bg-soft);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 0 6px 6px 0;
+            padding: 10px 13px;
+            font-size: 10px; color: var(--slate); line-height: 1.65;
+            margin-bottom: 14px;
+        }
+        .narrative p { margin-bottom: 5px; }
+        .narrative p:last-child { margin-bottom: 0; }
+
+        /* kpi */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .kpi-card { border: 1px solid var(--border); border-radius: 7px; padding: 11px 12px; background: #fff; border-top: 3px solid var(--accent); }
+        .kpi-label { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 5px; }
+        .kpi-value { font-size: 26px; font-weight: 800; color: var(--navy); line-height: 1; }
+
+        /* cumplimiento */
+        .compliance-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+        .donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .donut-label-main { font-size: 9px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+        .compliance-stats { display: flex; flex-direction: column; gap: 8px; }
+        .cs-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+        .cs-label { font-size: 9px; color: var(--muted); margin-bottom: 3px; }
+        .cs-value { font-size: 18px; font-weight: 800; color: var(--navy); }
+        .cs-sub { font-size: 8px; color: var(--muted); margin-top: 2px; }
+
+        /* tablas */
+        table { width: 100%; border-collapse: collapse; }
+        thead { display: table-header-group; }
+        th { padding: 8px 9px; background: var(--navy); color: #fff; font-size: 9px; font-weight: 600; text-align: left; letter-spacing: 0.3px; }
+        td { padding: 7px 9px; border-bottom: 1px solid var(--border); font-size: 10px; vertical-align: middle; }
+        tbody tr:nth-child(even) td { background: var(--bg-soft); }
+        tbody tr { page-break-inside: avoid; }
+        .text-center { text-align: center; }
+        .text-right  { text-align: right; }
+
+        /* badges */
+        .badge { display: inline-block; padding: 3px 7px; border-radius: 20px; font-size: 8.5px; font-weight: 700; white-space: nowrap; }
+        .badge-success { background: var(--green-bg);  color: var(--green); }
+        .badge-warning { background: var(--amber-bg);  color: var(--amber); }
+        .badge-danger  { background: var(--red-bg);    color: var(--red); }
+        .badge-info    { background: var(--accent-lt); color: var(--accent); }
+        .badge-violet  { background: #ede9fe;           color: var(--violet); }
+
+        /* barras */
+        .perf-list { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+        .perf-row { display: grid; grid-template-columns: 110px 1fr 42px; align-items: center; gap: 9px; }
+        .perf-name { font-size: 10px; font-weight: 600; color: var(--slate); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .perf-track { height: 11px; background: var(--border); border-radius: 20px; overflow: hidden; position: relative; }
+        .perf-bar { height: 100%; border-radius: 20px; }
+        .perf-bar-ideal  { background: linear-gradient(90deg, #16a34a, #4ade80); }
+        .perf-bar-alerta { background: linear-gradient(90deg, #d97706, #fbbf24); }
+        .perf-bar-riesgo { background: linear-gradient(90deg, #dc2626, #f87171); }
+        .perf-track::after { content: ''; position: absolute; top: 0; bottom: 0; left: 80%; width: 2px; background: rgba(0,0,0,0.35); }
+        .perf-val { text-align: right; font-size: 10px; font-weight: 700; }
+
+        /* procesos */
+        .proc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .proc-card { border: 1px solid var(--border); border-radius: 7px; padding: 11px 13px; border-left: 4px solid var(--accent); }
+        .proc-name { font-size: 10px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+        .proc-num  { font-size: 22px; font-weight: 800; color: var(--accent); }
+        .proc-sub  { font-size: 8.5px; color: var(--muted); margin-top: 2px; }
+
+        /* parámetros */
+        .param-block { margin-bottom: 14px; page-break-inside: avoid; }
+        .param-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 11px; background: var(--navy-mid); border-radius: 5px 5px 0 0; }
+        .param-header h3 { font-size: 11px; font-weight: 700; color: #fff; }
+        .param-header span { font-size: 8.5px; color: #94a3b8; }
+        td.cell-ideal  { color: var(--green); font-weight: 700; background: #f0fdf4; }
+        td.cell-alerta { color: var(--amber); font-weight: 700; background: #fffbeb; }
+        td.cell-riesgo { color: var(--red);   font-weight: 700; background: #fff1f2; }
+
+        /* incidencias */
+        .advisor-block { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; page-break-inside: avoid; }
+        .advisor-header { display: flex; justify-content: space-between; align-items: center; padding: 9px 13px; background: var(--bg-soft); border-bottom: 1px solid var(--border); }
+        .advisor-name { font-size: 12px; font-weight: 700; color: var(--navy); letter-spacing: 0.2px; }
+        .advisor-coord { font-size: 9px; color: var(--muted); margin-top: 2px; }
+        .advisor-score-wrap { text-align: right; }
+        .advisor-score { font-size: 20px; font-weight: 800; }
+
+        .grupos-inc-list { padding: 10px 13px; display: flex; flex-direction: column; gap: 8px; }
+
+        .grupo-inc-item { padding: 8px 10px; background: #fff; border: 1px solid var(--border); border-radius: 5px; border-left: 3px solid var(--amber); }
+        .grupo-inc-nombre { font-size: 10px; font-weight: 700; color: var(--navy); margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+        .grupo-tag { font-size: 8px; font-weight: 700; background: var(--navy); color: #fff; padding: 1px 5px; border-radius: 3px; }
+        .proceso-tag { font-size: 7.5px; font-weight: 600; background: var(--accent-lt); color: var(--accent); padding: 1px 5px; border-radius: 3px; margin-left: auto; }
+        .grupo-inc-obs { font-size: 9.5px; color: var(--slate); line-height: 1.55; }
+        .grupos-sin-obs { font-size: 9px; color: var(--muted); font-style: italic; padding: 4px 0; }
+        .no-incidents { font-size: 9.5px; color: var(--muted); font-style: italic; padding: 4px 0; }
+
+        /* conclusiones */
+        .concl-box { border: 1px solid var(--border); border-radius: 7px; padding: 13px 15px; line-height: 1.65; font-size: 10.5px; }
+        .concl-box p { margin-bottom: 8px; color: var(--slate); }
+        .concl-list { margin: 8px 0 0 16px; }
+        .concl-list li { margin-bottom: 5px; color: var(--slate); font-size: 10px; }
+
+        /* pie */
+        .page-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 6px 18px; background: var(--bg-soft); border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 8px; color: var(--muted); }
+        .page-footer strong { color: var(--slate); }
+
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        @media print {
+            body { background: #fff; }
+            .report { width: 100%; }
+            .page { margin: 0; width: 100%; min-height: auto; }
+        }
+    </style>
+</head>
+<body>
+<div class="report">
+
+<!-- ═══ PÁGINA 1 — RESUMEN ══════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header">
+        <div class="ph-left">
+            <h1>Reporte de Evaluaciones</h1>
+            <div class="ph-sub">Periodo: <strong>28 de agosto al 03 de septiembre de 2026</strong></div>
+        </div>
+        <div class="ph-right">
+            <div><strong>Generado:</strong> 06/09/2026</div>
+            <div><strong>Tipo:</strong> Auditoría Operativa</div>
+        </div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <!-- NARRATIVO -->
+        <div class="narrative">
+            <p>Durante el periodo se evaluaron en total <strong>7 asesores</strong> de las coordinaciones: <strong>De Corazón (3 ASEC), Lealtad (2 ASEC) y Mejorando Familias (2 ASEC)</strong>.</p>
+            <p>De los <strong>7 asesores auditados</strong>, <strong>5 cumplieron la meta</strong> en Calidad en el Servicio al Cliente. Además, se evaluaron <strong>2 coordinadores</strong>: Experiencias en el proceso de Recuperación y Sinergia en el proceso de Cobranza.</p>
+            <p>En total durante el periodo se evaluaron <strong>35 grupos</strong>. Dentro de las evaluaciones se realizaron revisiones a los procesos: <strong>Recuperación (35 grupos), Renovación (1 grupo) y Desembolso (3 grupos)</strong>.</p>
+        </div>
+
+        <!-- KPI -->
+        <div class="section">
+            <div class="section-title"><span class="dot"></span> Resumen general</div>
+            <div class="kpi-grid">
+                <div class="kpi-card" style="border-top-color:#1d4ed8;">
+                    <div class="kpi-label">ASEC evaluados</div>
+                    <div class="kpi-value">7</div>
+                </div>
+                <div class="kpi-card" style="border-top-color:#7c3aed;">
+                    <div class="kpi-label">Coordinaciones</div>
+                    <div class="kpi-value">3</div>
+                </div>
+                <div class="kpi-card" style="border-top-color:#0891b2;">
+                    <div class="kpi-label">Grupos evaluados</div>
+                    <div class="kpi-value">35</div>
+                </div>
+                <div class="kpi-card" style="border-top-color:#059669;">
+                    <div class="kpi-label">Evaluaciones totales</div>
+                    <div class="kpi-value">41</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CUMPLIMIENTO + DONA -->
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#16a34a;"></span> Cumplimiento de meta</div>
+            <div class="compliance-wrap">
+                <div class="donut-wrap">
+                    <div class="donut-label-main">Cumplimiento general</div>
+                    <!-- SVG dona 71% -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140">
+                        <circle cx="70" cy="70" r="50" fill="none" stroke="#e2e8f0" stroke-width="16"/>
+                        <circle cx="70" cy="70" r="50" fill="none" stroke="#f59e0b" stroke-width="16"
+                            stroke-linecap="round" stroke-dasharray="223.05 91.52"
+                            transform="rotate(-90 70 70)"/>
+                        <text x="70" y="66" text-anchor="middle"
+                            font-family="Inter,Arial,sans-serif" font-size="20" font-weight="800" fill="#b45309">71%</text>
+                        <text x="70" y="79" text-anchor="middle"
+                            font-family="Inter,Arial,sans-serif" font-size="9" fill="#64748b">cumplimiento</text>
+                        <line x1="108.3" y1="56.0" x2="119.7" y2="49.0" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+                        <text x="70" y="132" text-anchor="middle"
+                            font-family="Inter,Arial,sans-serif" font-size="8" fill="#64748b">▏ meta: 80%</text>
+                    </svg>
+                </div>
+                <div class="compliance-stats">
+                    <div class="cs-item">
+                        <div class="cs-label">ASEC que cumplen la meta (≥80%)</div>
+                        <div class="cs-value">5 <span style="font-size:12px;font-weight:500;color:#64748b;">de 7</span></div>
+                        <div class="cs-sub">71% de cumplimiento general</div>
+                    </div>
+                    <div class="cs-item">
+                        <div class="cs-label">Meta establecida</div>
+                        <div class="cs-value" style="color:#1d4ed8;">80%</div>
+                        <div class="cs-sub">Porcentaje mínimo aceptable</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLA ASEC -->
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#7c3aed;"></span> Resultados por ASEC</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Asesor</th>
+                        <th>Coordinación</th>
+                        <th class="text-center">Evals.</th>
+                        <th class="text-center">Promedio</th>
+                        <th class="text-center">Nivel</th>
+                        <th class="text-center">Meta alcanzada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>DANIEL</strong></td><td>DE CORAZÓN</td><td class="text-center">5</td><td class="text-center" style="font-weight:700;color:#16a34a;">95%</td><td class="text-center"><span class="badge badge-success">Ideal</span></td><td class="text-center"><span class="badge badge-success">SI</span></td></tr>
+                    <tr><td><strong>GABRIEL</strong></td><td>MEJORANDO FAMILIAS</td><td class="text-center">5</td><td class="text-center" style="font-weight:700;color:#16a34a;">94%</td><td class="text-center"><span class="badge badge-success">Ideal</span></td><td class="text-center"><span class="badge badge-success">SI</span></td></tr>
+                    <tr><td><strong>MORIN</strong></td><td>LEALTAD</td><td class="text-center">5</td><td class="text-center" style="font-weight:700;color:#16a34a;">93%</td><td class="text-center"><span class="badge badge-success">Ideal</span></td><td class="text-center"><span class="badge badge-success">SI</span></td></tr>
+                    <tr><td><strong>VIRIDIANA</strong></td><td>MEJORANDO FAMILIAS</td><td class="text-center">5</td><td class="text-center" style="font-weight:700;color:#16a34a;">81%</td><td class="text-center"><span class="badge badge-success">Ideal</span></td><td class="text-center"><span class="badge badge-success">SI</span></td></tr>
+                    <tr><td><strong>MONTSE</strong></td><td>DE CORAZÓN</td><td class="text-center">3</td><td class="text-center" style="font-weight:700;color:#b45309;">67%</td><td class="text-center"><span class="badge badge-warning">Alerta</span></td><td class="text-center"><span class="badge badge-danger">NO</span></td></tr>
+                    <tr><td><strong>LAURA</strong></td><td>DE CORAZÓN</td><td class="text-center">5</td><td class="text-center" style="font-weight:700;color:#b45309;">71%</td><td class="text-center"><span class="badge badge-warning">Alerta</span></td><td class="text-center"><span class="badge badge-danger">NO</span></td></tr>
+                    <tr><td><strong>MARINA</strong></td><td>LEALTAD</td><td class="text-center">2</td><td class="text-center" style="font-weight:700;color:#dc2626;">25%</td><td class="text-center"><span class="badge badge-danger">Riesgo</span></td><td class="text-center"><span class="badge badge-danger">NO</span></td></tr>
+                    <tr><td><strong>FERNANDA</strong></td><td>EXPERIENCIAS</td><td class="text-center">2</td><td class="text-center" style="font-weight:700;color:#dc2626;">25%</td><td class="text-center"><span class="badge badge-danger">Riesgo</span></td><td class="text-center"><span class="badge badge-danger">NO</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Resumen general</span>
+        <span>Periodo: 28/08/2026 - 03/09/2026</span>
+    </div>
+</section>
+
+
+<!-- ═══ PÁGINA 2 — DESEMPEÑO Y PROCESOS ═════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Desempeño y distribución de procesos</div>
+        <div class="phi-period">28/08/2026 - 03/09/2026</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot"></span> Desempeño por ASEC</div>
+            <div class="section-desc">La línea vertical indica la meta del 80%. Las barras se colorean según nivel.</div>
+            <div class="perf-list">
+                <div class="perf-row"><div class="perf-name">Daniel</div><div class="perf-track"><div class="perf-bar perf-bar-ideal" style="width:95%;"></div></div><div class="perf-val" style="color:#16a34a;">95%</div></div>
+                <div class="perf-row"><div class="perf-name">Gabriel</div><div class="perf-track"><div class="perf-bar perf-bar-ideal" style="width:94%;"></div></div><div class="perf-val" style="color:#16a34a;">94%</div></div>
+                <div class="perf-row"><div class="perf-name">Morin</div><div class="perf-track"><div class="perf-bar perf-bar-ideal" style="width:93%;"></div></div><div class="perf-val" style="color:#16a34a;">93%</div></div>
+                <div class="perf-row"><div class="perf-name">Viridiana</div><div class="perf-track"><div class="perf-bar perf-bar-ideal" style="width:81%;"></div></div><div class="perf-val" style="color:#16a34a;">81%</div></div>
+                <div class="perf-row"><div class="perf-name">Laura</div><div class="perf-track"><div class="perf-bar perf-bar-alerta" style="width:71%;"></div></div><div class="perf-val" style="color:#b45309;">71%</div></div>
+                <div class="perf-row"><div class="perf-name">Montse</div><div class="perf-track"><div class="perf-bar perf-bar-alerta" style="width:67%;"></div></div><div class="perf-val" style="color:#b45309;">67%</div></div>
+                <div class="perf-row"><div class="perf-name">Fernanda</div><div class="perf-track"><div class="perf-bar perf-bar-riesgo" style="width:25%;"></div></div><div class="perf-val" style="color:#dc2626;">25%</div></div>
+                <div class="perf-row"><div class="perf-name">Marina</div><div class="perf-track"><div class="perf-bar perf-bar-riesgo" style="width:25%;"></div></div><div class="perf-val" style="color:#dc2626;">25%</div></div>
+            </div>
+        </div>
+
+        <div class="two-col">
+            <div class="section">
+                <div class="section-title"><span class="dot" style="background:#0891b2;"></span> Procesos evaluados</div>
+                <div class="proc-grid" style="grid-template-columns:1fr 1fr;">
+                    <div class="proc-card" style="border-left-color:#1d4ed8;"><div class="proc-name">Recuperación</div><div class="proc-num" style="color:#1d4ed8;">35</div><div class="proc-sub">grupos evaluados</div></div>
+                    <div class="proc-card" style="border-left-color:#7c3aed;"><div class="proc-name">Renovación</div><div class="proc-num" style="color:#7c3aed;">1</div><div class="proc-sub">grupo evaluado</div></div>
+                    <div class="proc-card" style="border-left-color:#0891b2;"><div class="proc-name">Desembolso</div><div class="proc-num" style="color:#0891b2;">3</div><div class="proc-sub">grupos evaluados</div></div>
+                    <div class="proc-card" style="border-left-color:#059669;"><div class="proc-name">Cobranza</div><div class="proc-num" style="color:#059669;">2</div><div class="proc-sub">grupos evaluados</div></div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title"><span class="dot" style="background:#f59e0b;"></span> Distribución</div>
+                <table>
+                    <thead><tr><th>Proceso</th><th class="text-center">Grupos</th><th class="text-center">Evals.</th><th class="text-center">%</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Recuperación</strong></td><td class="text-center">35</td><td class="text-center">35</td><td class="text-center">85%</td></tr>
+                        <tr><td><strong>Desembolso</strong></td><td class="text-center">3</td><td class="text-center">3</td><td class="text-center">7%</td></tr>
+                        <tr><td><strong>Cobranza</strong></td><td class="text-center">2</td><td class="text-center">2</td><td class="text-center">5%</td></tr>
+                        <tr><td><strong>Renovación</strong></td><td class="text-center">1</td><td class="text-center">1</td><td class="text-center">2%</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Desempeño y procesos</span>
+        <span>Periodo: 28/08/2026 - 03/09/2026</span>
+    </div>
+</section>
+
+
+<!-- ═══ PÁGINA 3 — PARÁMETROS ════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Resultados de parámetros</div>
+        <div class="phi-period">28/08/2026 - 03/09/2026</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#dc2626;"></span> Resultados de parámetros</div>
+            <div class="section-desc">Distribución por parámetro y proceso. <span style="color:#16a34a;font-weight:600;">Verde = Ideal</span> · <span style="color:#b45309;font-weight:600;">Ámbar = Alerta</span> · <span style="color:#dc2626;font-weight:600;">Rojo = Riesgo</span></div>
+
+            <div class="param-block">
+                <div class="param-header"><h3>Recuperación</h3><span>35 evaluaciones</span></div>
+                <table>
+                    <thead><tr><th>Parámetro</th><th class="text-center" style="background:#16a34a;">Ideal</th><th class="text-center" style="background:#b45309;">Alerta</th><th class="text-center" style="background:#dc2626;">Riesgo</th></tr></thead>
+                    <tbody>
+                        <tr><td>Puntualidad del asesor</td><td class="text-center cell-ideal">30</td><td class="text-center cell-alerta">4</td><td class="text-center cell-riesgo">1</td></tr>
+                        <tr><td>Asistencia del grupo</td><td class="text-center cell-ideal">32</td><td class="text-center cell-alerta">2</td><td class="text-center cell-riesgo">1</td></tr>
+                        <tr><td>Recuperación pactado</td><td class="text-center cell-ideal">29</td><td class="text-center cell-alerta">5</td><td class="text-center cell-riesgo">1</td></tr>
+                        <tr><td>Ficha cerrada</td><td class="text-center cell-ideal">27</td><td class="text-center cell-alerta">5</td><td class="text-center cell-riesgo">3</td></tr>
+                        <tr><td>Registro hoja de control</td><td class="text-center cell-ideal">31</td><td class="text-center cell-alerta">3</td><td class="text-center cell-riesgo">1</td></tr>
+                        <tr><td>Cotejo hoja de control</td><td class="text-center cell-ideal">30</td><td class="text-center cell-alerta">4</td><td class="text-center cell-riesgo">1</td></tr>
+                        <tr><td>Recibos</td><td class="text-center cell-ideal">32</td><td class="text-center cell-alerta">2</td><td class="text-center cell-riesgo">1</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="param-block">
+                <div class="param-header"><h3>Cobranza</h3><span>8 evaluaciones</span></div>
+                <table>
+                    <thead><tr><th>Parámetro</th><th class="text-center" style="background:#16a34a;">Ideal</th><th class="text-center" style="background:#b45309;">Alerta</th><th class="text-center" style="background:#dc2626;">Riesgo</th></tr></thead>
+                    <tbody>
+                        <tr><td>Días de atraso</td><td class="text-center cell-ideal">6</td><td class="text-center cell-alerta">1</td><td class="text-center cell-riesgo">1</td></tr>
+                        <tr><td>Estrategias ASEC</td><td class="text-center cell-ideal">7</td><td class="text-center cell-alerta">1</td><td class="text-center cell-riesgo">0</td></tr>
+                        <tr><td>Acciones</td><td class="text-center cell-ideal">7</td><td class="text-center cell-alerta">0</td><td class="text-center cell-riesgo">1</td></tr>
+                        <tr><td>Saldo vencido</td><td class="text-center cell-ideal">5</td><td class="text-center cell-alerta">1</td><td class="text-center cell-riesgo">2</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="param-block">
+                <div class="param-header"><h3>Desembolso</h3><span>3 evaluaciones</span></div>
+                <table>
+                    <thead><tr><th>Parámetro</th><th class="text-center" style="background:#16a34a;">Totalmente</th><th class="text-center" style="background:#b45309;">Parcial</th><th class="text-center" style="background:#dc2626;">No</th></tr></thead>
+                    <tbody>
+                        <tr><td>Dinámica y presentación</td><td class="text-center cell-ideal">2</td><td class="text-center cell-alerta">1</td><td class="text-center cell-riesgo">0</td></tr>
+                        <tr><td>Educación financiera</td><td class="text-center cell-ideal">3</td><td class="text-center cell-alerta">0</td><td class="text-center cell-riesgo">0</td></tr>
+                        <tr><td>Devolución de garantías</td><td class="text-center cell-ideal">3</td><td class="text-center cell-alerta">0</td><td class="text-center cell-riesgo">0</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Parámetros</span>
+        <span>Periodo: 28/08/2026 - 03/09/2026</span>
+    </div>
+</section>
+
+
+<!-- ═══ PÁGINA 4 — INCIDENCIAS POR GRUPO ════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Resumen de incidencias en grupos</div>
+        <div class="phi-period">28/08/2026 - 03/09/2026</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#dc2626;"></span> Incidencias por asesor y grupo</div>
+            <div class="section-desc">Observaciones y hallazgos registrados durante las evaluaciones del periodo, agrupados por asesor.</div>
+
+            <!-- GABRIEL -->
+            <div class="advisor-block">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name">GABRIEL</div>
+                        <div class="advisor-coord"><strong>COORD</strong> MEJORANDO FAMILIAS &nbsp;·&nbsp; 5 evaluaciones</div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:#16a34a;">94%</div>
+                        <span class="badge badge-success">Meta: SI</span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-obs">En general ASEC presenta orden en sus HDC, coincidencias en saldos en HDC y recibos sin observaciones. Por los parámetros que bajó su calidad fue el cierre de ficha, ya que en 3 de los 5 grupos evaluados cerró ficha después de un lapso de 1 hora.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIRIDIANA -->
+            <div class="advisor-block">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name">VIRIDIANA</div>
+                        <div class="advisor-coord"><strong>COORD</strong> MEJORANDO FAMILIAS &nbsp;·&nbsp; 5 evaluaciones</div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:#16a34a;">81%</div>
+                        <span class="badge badge-success">Meta: SI</span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Chipakaba <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">El grupo presenta atrasos de pagos de las clientas Sandra Elizabeth Hernández García y Natalia Ramírez Hernández. No coinciden HDC con los recibos de la semana 7 y 8. Cliente Abelardo Miguel Mata Chavero con pago de $462 daba su pago el sábado. Ahorros de la semana 12 de Abelardo en HDC tesorera aparece tachado; en HDC ASEC aparece normal. Se encuentra en semana 16, no se le entrega desembolso porque se planea recuperar mora en esta semana.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Money <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">No se pudo evaluar al grupo porque se hizo cambio de horario a petición de tesorera, ya que no estaría en su domicilio. El grupo estaba agendado a las 15:00 y se cambió para atención a las 18:00.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Mujeres Virtuosas <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">No se recuperó el pago pactado porque tiene clientes que presentan mora en la recuperación del crédito.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Santiaguito <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">De la semana 5 en adelante se han tenido retardos en la recuperación del pago del cliente Baldomero Ramírez López. Faltan recibos de esas semanas; la suma de los recibos que tiene tesorera no coincide con el pago pactado. En semana 5 la suma de recibos es de $5,982 y en HDC se registró $6,601. Se han tomado de ahorros para hacer solidarios al señor Baldomero, en semanas 2 y 10.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Fulanitos <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">Clienta Edith Alba Rocha realizó renovación de ciclo en semana 8, por lo que su pactado subió y también el pago pactado del grupo. En semana 9 se enviaron $5 de más en el pactado; debió quedar $17,188 y el recibo está por $17,193.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MORIN -->
+            <div class="advisor-block">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name">MORIN</div>
+                        <div class="advisor-coord"><strong>COORD</strong> LEALTAD &nbsp;·&nbsp; 5 evaluaciones</div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:#16a34a;">93%</div>
+                        <span class="badge badge-success">Meta: SI</span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Mujeres Cumplidas <span class="proceso-tag">Recuperación / Renovación</span></div>
+                        <div class="grupo-inc-obs">Diferencias entre HDC ASEC y HDC tesorera en los ahorros de la semana 14, clienta Leticia Ramírez Delgado. Para semana 15 se terminó de documentar a todos los integrantes del grupo.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Rosas Azules <span class="proceso-tag">Recuperación / Desembolso</span></div>
+                        <div class="grupo-inc-obs">Diferencias en los ahorros anotados en HDC ASEC y HDC tesorera. Diferencias entre lo anotado en ahorros y el recibo de la semana 10. En esta semana ASEC fue cubierto por COP en las atenciones. Desembolso: se cumplen todos los parámetros a excepción de la cápsula de educación financiera, no se mostró.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Begonias <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">Diferencias entre HDC ASEC y HDC tesorera y recibos en la semana 5. Se corrige en el momento; era error de escritura.</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- COP / COORDINADORES -->
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#7c3aed;"></span> Evaluaciones a coordinadores (COP)</div>
+
+            <!-- COP FERNANDA -->
+            <div class="advisor-block" style="border-left: 3px solid #7c3aed;">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name" style="color:#7c3aed;">COP FERNANDA</div>
+                        <div class="advisor-coord"><strong>COORD</strong> EXPERIENCIAS &nbsp;·&nbsp; Proceso: Recuperación</div>
+                    </div>
+                    <div><span class="badge badge-danger">Promedio: 25%</span></div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Sol de Mary Kay <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">No se pudo evaluar al grupo porque se hizo cambio de horario a petición de tesorera. El grupo estaba agendado a las 15:00 y a las 17:00 aún no se había atendido por el mismo motivo.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Manos Mexicanas <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">No se pudo evaluar al grupo porque se hizo cambio de horario a petición de tesorera. El grupo estaba agendado a las 15:30 y a las 17:00 aún no se había atendido por el mismo motivo.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COP ALICIA (SINERGIA / COBRANZA) -->
+            <div class="advisor-block" style="border-left: 3px solid #7c3aed;">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name" style="color:#7c3aed;">COP ALICIA</div>
+                        <div class="advisor-coord"><strong>COORD</strong> SINERGIA &nbsp;·&nbsp; Proceso: Cobranza</div>
+                    </div>
+                    <div><span class="badge badge-violet">Coordinador</span></div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Diamante <span class="proceso-tag">Cobranza</span></div>
+                        <div class="grupo-inc-obs">Mora de aproximadamente $16,000. Clienta comenta que ha tenido visitas de Compartamos Banco donde le ofrecen crédito. Entrega $1,000; su pago semanal es de $2,000. ASEC no ha recibido la HDC actualizada, donde anota se venció el 18 de agosto.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Estrellas <span class="proceso-tag">Cobranza</span></div>
+                        <div class="grupo-inc-obs">Mora de $130,000. Clientes con mayor mora: María de Jesús Ramírez con $28,200, María de la Luz Lluvia Arreola con $56,836 y Enrique Arreola con $45,731. Durante la atención ASEC no recibe ningún pago.</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Incidencias</span>
+        <span>Periodo: 28/08/2026 - 03/09/2026</span>
+    </div>
+</section>
+
+
+<!-- ═══ PÁGINA 5 — MÁS INCIDENCIAS ═════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Incidencias (continuación)</div>
+        <div class="phi-period">28/08/2026 - 03/09/2026</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+
+            <!-- MARINA -->
+            <div class="advisor-block">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name">MARINA</div>
+                        <div class="advisor-coord"><strong>COORD</strong> LEALTAD &nbsp;·&nbsp; 2 evaluaciones</div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:#dc2626;">25%</div>
+                        <span class="badge badge-danger">Meta: NO</span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-obs">G. La Cruz | G. Artesano | G. Mujeres Valientes | G. Hadas. ASEC no se presentó a trabajar sin previo aviso, por lo que COP tuvo que cubrir los grupos. Sin embargo, por la agenda de COP no se pudieron atender en el horario normal y no se pudo revisar el grupo.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LAURA -->
+            <div class="advisor-block">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name">LAURA</div>
+                        <div class="advisor-coord"><strong>COORD</strong> DE CORAZÓN &nbsp;·&nbsp; 5 evaluaciones</div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:#b45309;">71%</div>
+                        <span class="badge badge-danger">Meta: NO</span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Mujeres Creativas <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">Se tenía contemplada la atención del grupo a las 10:00 pero ASEC comentó que se atiende a las 10:30. En su agenda aparece a las 10:00.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> La Luz <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">Se cambió de horario la atención por originación, se atendió a las 13:00. COP comenta que sí aparece en agenda a las 13:00 pero en agenda de ASEC no aparece. Por lo anterior no se pudo evaluar.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Flores de la Presita <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">ASEC presente 30 minutos después de la hora agendada. En semana 1 del ciclo 26 y en la mañana aún no estaba la HDC en aplicación por lo que ASEC no alcanzó a imprimir la que se le deja a tesorera.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MONTSE -->
+            <div class="advisor-block">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name">MONTSE</div>
+                        <div class="advisor-coord"><strong>COORD</strong> DE CORAZÓN &nbsp;·&nbsp; 3 evaluaciones</div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:#b45309;">67%</div>
+                        <span class="badge badge-danger">Meta: NO</span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Las Esperanzas <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">ASEC no había recibido HDC ni de tesorera ni de asesor. Se comunica asesor con coordinador para solicitarla nuevamente a CI; es semana 1 del ciclo 28.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DANIEL -->
+            <div class="advisor-block">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name">DANIEL</div>
+                        <div class="advisor-coord"><strong>COORD</strong> DE CORAZÓN &nbsp;·&nbsp; 5 evaluaciones</div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:#16a34a;">95%</div>
+                        <span class="badge badge-success">Meta: SI</span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Estrellas de la Pre <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">ASEC con retraso de 15 minutos por el cierre de ficha del grupo anterior.</div>
+                    </div>
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre"><span class="grupo-tag">G.</span> Las Negritas <span class="proceso-tag">Recuperación</span></div>
+                        <div class="grupo-inc-obs">ASEC sin HDC en aplicación. En semana 1 del ciclo 29, ASEC no tenía acceso a HDC.</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Incidencias (cont.)</span>
+        <span>Periodo: 28/08/2026 - 03/09/2026</span>
+    </div>
+</section>
+
+
+<!-- ═══ PÁGINA 6 — CONCLUSIONES ═════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Conclusiones del periodo</div>
+        <div class="phi-period">28/08/2026 - 03/09/2026</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#059669;"></span> Conclusiones</div>
+            <div class="concl-box">
+                <p>Durante el periodo evaluado se realizaron <strong>41 evaluaciones</strong> correspondientes a <strong>35 grupos</strong> y <strong>7 ASEC</strong> de las coordinaciones evaluadas. Además, se auditaron <strong>2 coordinadores</strong>.</p>
+                <p>Del total de ASEC evaluados, <strong>5 cumplieron con la meta establecida</strong>, mientras que 3 se encontraron por debajo del resultado esperado.</p>
+                <strong style="font-size:10px;">Principales hallazgos:</strong>
+                <ul class="concl-list">
+                    <li>Ficha cerrada (Recuperación) presentó la mayor frecuencia de riesgo durante el periodo.</li>
+                    <li>Laura (71%) y Montse (67%) se encuentran en nivel de alerta, requiriendo seguimiento.</li>
+                    <li>Marina y Fernanda presentan nivel de riesgo con 25%, requiriendo atención prioritaria.</li>
+                    <li>Se detectaron diferencias recurrentes entre información registrada en HDC y recibos.</li>
+                    <li>Dos grupos (Sol de Mary Kay y Manos Mexicanas) no pudieron evaluarse por cambios de horario no autorizados.</li>
+                    <li>Se identificaron grupos con mora significativa en el proceso de Cobranza (G. Estrellas: $130,000).</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#1d4ed8;"></span> Resumen de resultados</div>
+            <table>
+                <thead><tr><th>Indicador</th><th class="text-right">Resultado</th></tr></thead>
+                <tbody>
+                    <tr><td>ASEC evaluados</td><td class="text-right"><strong>7</strong></td></tr>
+                    <tr><td>Coordinaciones evaluadas</td><td class="text-right"><strong>3</strong></td></tr>
+                    <tr><td>Coordinadores auditados (COP)</td><td class="text-right"><strong>2</strong></td></tr>
+                    <tr><td>Grupos evaluados</td><td class="text-right"><strong>35</strong></td></tr>
+                    <tr><td>Evaluaciones realizadas</td><td class="text-right"><strong>41</strong></td></tr>
+                    <tr><td>ASEC que cumplen la meta</td><td class="text-right"><strong>5</strong></td></tr>
+                    <tr><td>ASEC que no cumplen la meta</td><td class="text-right"><strong>3</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Conclusiones</span>
+        <span>Fin del reporte · 06/09/2026</span>
+    </div>
+</section>
+
+</div>
+</body>
+</html>

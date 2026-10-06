@@ -57,7 +57,7 @@ const EvaluationSchema = new Schema({
 
     procesoEvaluado: {
       type: String,
-      enum: ['Recuperación', 'Renovación', 'Desembolso', 'Cobranza'],
+      enum: ['Recuperación', 'Renovación', 'Desembolso', 'Cobranza', 'Procesos de Ejecutivas', 'Ejecutiva'],
       required: true
     },
 
@@ -98,11 +98,8 @@ const EvaluationSchema = new Schema({
     montoDeposito: { type: Number, default: 0 },
     hayCargosAjustes: { type: Boolean, default: false },
     observacionesRecuperacion: { type: String, default: "" },
-    observacionesRenovacion: { type: String, default: "" },
-    observacionesDesembolso: { type: String, default: "" },
-    observacionesCobranza: { type: String, default: "" }
+    //observaciones: { type: String, default: "" }
   },
-
   recuperacionIndividuales: {
     recuperacionPactadoInd: { type: String, enum: NivelEnum },
     fichaCerradaInd: { type: String, enum: NivelEnum },
@@ -119,6 +116,12 @@ const EvaluationSchema = new Schema({
     grupoGeneroMultas: { type: Boolean, default: false },
     grupoGeneroMoratorios: { type: Boolean, default: false },
     grupoRealizoAdelantos: { type: Boolean, default: false },
+    participacionSolidaria: { type: String, enum: NivelEnum },
+    recuperacionSolidario: { type: String, enum: NivelEnum },
+    multas: { type: String, enum: NivelEnum },
+    destinoMultas: { type: String, enum: NivelEnum },
+    moratorios: { type: String, enum: NivelEnum },
+    adelantos: { type: String, enum: NivelEnum },
   },
 
   renovacion: {
@@ -126,7 +129,9 @@ const EvaluationSchema = new Schema({
     asesoriaCliente: { type: String, enum: NivelEnum },
     expedientesCompletos: { type: String, enum: NivelEnum },
     valoracionRiesgo: { type: String, enum: NivelEnum },
-    observaciones: { type: String, default: "" },
+    //evaluaraOtroProceso: { type: Boolean, default: false },
+    observacionesRenovacion: { type: String, default: "" }
+    //observaciones: { type: String, default: "" }
   },
 
   cierreCiclo: {
@@ -134,6 +139,7 @@ const EvaluationSchema = new Schema({
     ahorrosSemana15: { type: Number, default: 0 },
     solidariosSemana15: { type: Number, default: 0 },
     multasSemana15: { type: Number, default: 0 },
+    validacionGeneral: { type: String, default: "" },
     validacionInfo: {
       ahorrosPorSemana: { type: String, enum: CoincidenciaEnum },
       ahorrosPorCliente: { type: String, enum: CoincidenciaEnum },
@@ -144,7 +150,8 @@ const EvaluationSchema = new Schema({
     clientesBuenComportamiento: { type: String, default: "" },
     clientesInconsistencias: { type: String, default: "" },
     incidencias: { type: String, default: "" },
-    observaciones: { type: String, default: "" },
+    incidenciasCierre: { type: String, default: "" },
+    //observaciones: { type: String, default: "" },
   },
 
   desembolsoCredito: {
@@ -154,7 +161,9 @@ const EvaluationSchema = new Schema({
       comentariosReglamento: { type: String, enum: CumplimientoEnum },
       educacionFinanciera: { type: String, enum: CumplimientoEnum },
       devolucionGarantias: { type: String, enum: CumplimientoEnum },
-      pagoSancionesSolidarios: { type: String, enum: CumplimientoEnum }
+      pagoSancionesSolidarios: { type: String, enum: CumplimientoEnum },
+      comentariosContrato: { type: String, enum: CumplimientoEnum },
+      observacionesDesembolso: { type: String, default: "" }
     },
     actividadesDurante: {
       solicitoINE: { type: String, enum: CumplimientoCortoEnum },
@@ -167,21 +176,41 @@ const EvaluationSchema = new Schema({
       mensajeCierre: { type: String, enum: CumplimientoEnum },
       recomendacionesRecuperacion: { type: String, enum: CumplimientoEnum }
     },
-    observaciones: { type: String, default: "" }
+    observacionesDesembolso: { type: String, default: "" },
+    //observaciones: { type: String, default: "" },
+    //observacionesGenerales: { type: String, default: "" }
   },
 
   cobranza: {
     diasAtraso: { type: String, enum: NivelEnum },
     estrategiasASEC: { type: String, enum: NivelEnum },
+    estrategiasAsec: { type: String, enum: NivelEnum },
     acciones: { type: String, enum: NivelEnum },
     saldoVencido: { type: String, enum: NivelEnum },
-    observaciones: { type: String, default: "" }
+    observacionesCobranza: { type: String, default: "" },
+    //observaciones: { type: String, default: "" }
   },
-
   evidenciaFotos: {
     type: [String],
     default: []
-  }
+  },
+  tipoAuditoria: {
+    type: String,
+    enum: ['Operativa', 'Ejecutiva'],
+    default: 'Operativa'
+  },
+  calificacionTotal: {
+    type: Number,
+    default: 0
+  },
+  nivelRiesgo: {
+    type: String,
+    default: ''
+  },
+  calificacionesDetalle: {
+    type: Schema.Types.Mixed,
+    default: {}
+  },
 }, { timestamps: true });
 
 // Índices para acelerar búsquedas y sincronización

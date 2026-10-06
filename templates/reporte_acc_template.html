@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reporte de Evaluaciones</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* ── TOKENS ─────────────────────────────────────────── */
+        :root {
+            --navy:     #0f172a;
+            --navy-mid: #1e293b;
+            --slate:    #334155;
+            --muted:    #64748b;
+            --border:   #e2e8f0;
+            --bg-soft:  #f8fafc;
+            --green:    #16a34a;  --green-bg: #dcfce7;
+            --amber:    #b45309;  --amber-bg: #fef3c7;
+            --red:      #dc2626;  --red-bg:   #fee2e2;
+            --accent:   #1d4ed8;  --accent-lt: #dbeafe;
+            --violet:   #7c3aed;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #e5e7eb;
+            color: var(--navy);
+            font-family: 'Inter', Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.5;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* ── DOCUMENTO ──────────────────────────────────────── */
+        .report  { width: 210mm; margin: 0 auto; }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            background: #fff;
+            padding: 0;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+        }
+        .page:last-child { page-break-after: auto; }
+        .page-body { padding: 12mm 14mm 24px; }
+
+        /* ── ENCABEZADOS ────────────────────────────────────── */
+        .page-header {
+            background: var(--navy);
+            padding: 16px 18px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .ph-left h1 { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+        .ph-left .ph-sub { font-size: 10px; color: #94a3b8; margin-top: 3px; }
+        .ph-left .ph-sub strong { color: #cbd5e1; }
+        .ph-right { text-align: right; font-size: 9px; color: #64748b; line-height: 1.7; }
+        .ph-right strong { color: #94a3b8; }
+
+        .page-header-inner {
+            background: var(--navy);
+            padding: 10px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .phi-title { font-size: 12px; font-weight: 700; color: #fff; }
+        .phi-period { font-size: 9px; color: #94a3b8; }
+
+        /* ── SECCIONES ──────────────────────────────────────── */
+        .section { margin-bottom: 16px; }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 9px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid var(--navy);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .section-title .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            flex-shrink: 0;
+        }
+        .section-desc { font-size: 9px; color: var(--muted); margin-bottom: 9px; margin-top: -3px; }
+
+        /* ── BLOQUE NARRATIVO ───────────────────────────────── */
+        .narrative {
+            background: var(--bg-soft);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 0 6px 6px 0;
+            padding: 10px 13px;
+            font-size: 10px;
+            color: var(--slate);
+            line-height: 1.65;
+            margin-bottom: 14px;
+        }
+        .narrative p { margin-bottom: 5px; }
+        .narrative p:last-child { margin-bottom: 0; }
+
+        /* ── KPI CARDS ──────────────────────────────────────── */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .kpi-card {
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 11px 12px;
+            background: #fff;
+            border-top: 3px solid var(--accent);
+        }
+        .kpi-label { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 5px; }
+        .kpi-value { font-size: 26px; font-weight: 800; color: var(--navy); line-height: 1; }
+
+        /* ── CUMPLIMIENTO ────────────────────────────────────── */
+        .compliance-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+        .donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .donut-label-main { font-size: 9px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+        .compliance-stats { display: flex; flex-direction: column; gap: 8px; }
+        .cs-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+        .cs-label { font-size: 9px; color: var(--muted); margin-bottom: 3px; }
+        .cs-value { font-size: 18px; font-weight: 800; color: var(--navy); }
+        .cs-sub { font-size: 8px; color: var(--muted); margin-top: 2px; }
+
+        /* ── TABLAS ──────────────────────────────────────────── */
+        table { width: 100%; border-collapse: collapse; }
+        thead { display: table-header-group; }
+        th { padding: 8px 9px; background: var(--navy); color: #fff; font-size: 9px; font-weight: 600; text-align: left; letter-spacing: 0.3px; }
+        td { padding: 7px 9px; border-bottom: 1px solid var(--border); font-size: 10px; vertical-align: middle; }
+        tbody tr:nth-child(even) td { background: var(--bg-soft); }
+        tbody tr { page-break-inside: avoid; }
+        .text-center { text-align: center; }
+        .text-right  { text-align: right; }
+
+        /* ── BADGES ──────────────────────────────────────────── */
+        .badge { display: inline-block; padding: 3px 7px; border-radius: 20px; font-size: 8.5px; font-weight: 700; white-space: nowrap; }
+        .badge-success { background: var(--green-bg);  color: var(--green); }
+        .badge-warning { background: var(--amber-bg);  color: var(--amber); }
+        .badge-danger  { background: var(--red-bg);    color: var(--red); }
+        .badge-info    { background: var(--accent-lt); color: var(--accent); }
+        .badge-violet  { background: #ede9fe;           color: var(--violet); }
+
+        /* ── BARRAS DESEMPEÑO ────────────────────────────────── */
+        .perf-list { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+        .perf-row { display: grid; grid-template-columns: 110px 1fr 42px; align-items: center; gap: 9px; }
+        .perf-name { font-size: 10px; font-weight: 600; color: var(--slate); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .perf-track { height: 11px; background: var(--border); border-radius: 20px; overflow: hidden; position: relative; }
+        .perf-bar { height: 100%; border-radius: 20px; }
+        .perf-bar-ideal  { background: linear-gradient(90deg, #16a34a, #4ade80); }
+        .perf-bar-alerta { background: linear-gradient(90deg, #d97706, #fbbf24); }
+        .perf-bar-riesgo { background: linear-gradient(90deg, #dc2626, #f87171); }
+        .perf-track::after { content: ''; position: absolute; top: 0; bottom: 0; left: 80%; width: 2px; background: rgba(0,0,0,0.35); }
+        .perf-val { text-align: right; font-size: 10px; font-weight: 700; }
+
+        /* ── PROCESOS ────────────────────────────────────────── */
+        .proc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .proc-card { border: 1px solid var(--border); border-radius: 7px; padding: 11px 13px; border-left: 4px solid var(--accent); }
+        .proc-name { font-size: 10px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+        .proc-num  { font-size: 22px; font-weight: 800; color: var(--accent); }
+        .proc-sub  { font-size: 8.5px; color: var(--muted); margin-top: 2px; }
+
+        /* ── PARÁMETROS ──────────────────────────────────────── */
+        .param-block { margin-bottom: 14px; page-break-inside: avoid; }
+        .param-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 11px; background: var(--navy-mid); border-radius: 5px 5px 0 0; }
+        .param-header h3 { font-size: 11px; font-weight: 700; color: #fff; }
+        .param-header span { font-size: 8.5px; color: #94a3b8; }
+        td.cell-ideal  { color: var(--green); font-weight: 700; background: #f0fdf4; }
+        td.cell-alerta { color: var(--amber); font-weight: 700; background: #fffbeb; }
+        td.cell-riesgo { color: var(--red);   font-weight: 700; background: #fff1f2; }
+
+        /* ── BLOQUES DE INCIDENCIAS ──────────────────────────── */
+        .advisor-block {
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            overflow: hidden;
+            page-break-inside: avoid;
+        }
+
+        .advisor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 13px;
+            background: var(--bg-soft);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .advisor-name { font-size: 12px; font-weight: 700; color: var(--navy); letter-spacing: 0.2px; }
+        .advisor-coord { font-size: 9px; color: var(--muted); margin-top: 2px; }
+        .advisor-score-wrap { text-align: right; }
+        .advisor-score { font-size: 20px; font-weight: 800; }
+
+        /* Lista de grupos con incidencias */
+        .grupos-inc-list { padding: 10px 13px; display: flex; flex-direction: column; gap: 8px; }
+
+        .grupo-inc-item {
+            padding: 8px 10px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            border-left: 3px solid var(--border);
+        }
+
+        .grupo-inc-item:has(.grupo-inc-obs) { border-left-color: var(--amber); }
+
+        .grupo-inc-nombre {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .grupo-tag {
+            font-size: 8px;
+            font-weight: 700;
+            background: var(--navy);
+            color: #fff;
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .proceso-tag {
+            font-size: 7.5px;
+            font-weight: 600;
+            background: var(--accent-lt);
+            color: var(--accent);
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: auto;
+        }
+
+        .grupo-inc-obs {
+            font-size: 9.5px;
+            color: var(--slate);
+            line-height: 1.55;
+        }
+
+        .grupos-sin-obs {
+            font-size: 9px;
+            color: var(--muted);
+            font-style: italic;
+            padding: 4px 0;
+        }
+
+        .no-incidents { font-size: 9.5px; color: var(--muted); font-style: italic; padding: 4px 0; }
+
+        /* ── CONCLUSIONES ────────────────────────────────────── */
+        .concl-box { border: 1px solid var(--border); border-radius: 7px; padding: 13px 15px; line-height: 1.65; font-size: 10.5px; }
+        .concl-box p { margin-bottom: 8px; color: var(--slate); }
+        .concl-list { margin: 8px 0 0 16px; }
+        .concl-list li { margin-bottom: 5px; color: var(--slate); font-size: 10px; }
+
+        /* ── PIE DE PÁGINA ───────────────────────────────────── */
+        .page-footer {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            padding: 6px 18px;
+            background: var(--bg-soft);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 8px;
+            color: var(--muted);
+        }
+        .page-footer strong { color: var(--slate); }
+
+        /* ── LAYOUTS ─────────────────────────────────────────── */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        @media print {
+            body { background: #fff; }
+            .report { width: 100%; }
+            .page { margin: 0; width: 100%; min-height: auto; }
+        }
+    </style>
+</head>
+<body>
+<div class="report">
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 1 — RESUMEN GENERAL
+═══════════════════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header">
+        <div class="ph-left">
+            <h1>Reporte de Evaluaciones</h1>
+            <div class="ph-sub">Periodo: <strong>{{PERIODO_LARGO}}</strong></div>
+        </div>
+        <div class="ph-right">
+            <div><strong>Generado:</strong> {{FECHA_GENERACION}}</div>
+            <div><strong>Tipo:</strong> {{TIPO_AUDITORIA}}</div>
+        </div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <!-- RESUMEN NARRATIVO -->
+        <div class="narrative">
+            <p>Durante el periodo se evaluaron en total <strong>{{TOTAL_ASEC}} asesores</strong> de las coordinaciones: <strong>{{COORD_RESUMEN}}</strong>.</p>
+            <p>De los <strong>{{TOTAL_ASEC}} asesores auditados</strong>, <strong>{{ASEC_CUMPLEN}} cumplieron la meta</strong> en Calidad en el Servicio al Cliente.</p>
+            <p>En total durante el periodo se evaluaron <strong>{{TOTAL_GRUPOS}} grupos</strong>. Dentro de las evaluaciones se realizaron revisiones a los procesos: <strong>{{PROCESOS_TEXTO}}</strong>.</p>
+        </div>
+
+        <!-- KPI CARDS -->
+        <div class="section">
+            <div class="section-title"><span class="dot"></span> Resumen general</div>
+            <div class="kpi-grid">
+                <div class="kpi-card" style="border-top-color:#1d4ed8;">
+                    <div class="kpi-label">ASEC evaluados</div>
+                    <div class="kpi-value">{{TOTAL_ASEC}}</div>
+                </div>
+                <div class="kpi-card" style="border-top-color:#7c3aed;">
+                    <div class="kpi-label">Coordinaciones</div>
+                    <div class="kpi-value">{{TOTAL_COORDINACIONES}}</div>
+                </div>
+                <div class="kpi-card" style="border-top-color:#0891b2;">
+                    <div class="kpi-label">Grupos evaluados</div>
+                    <div class="kpi-value">{{TOTAL_GRUPOS}}</div>
+                </div>
+                <div class="kpi-card" style="border-top-color:#059669;">
+                    <div class="kpi-label">Evaluaciones totales</div>
+                    <div class="kpi-value">{{TOTAL_EVALUACIONES}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CUMPLIMIENTO + DONA -->
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#16a34a;"></span> Cumplimiento de meta</div>
+            <div class="compliance-wrap">
+                <div class="donut-wrap">
+                    <div class="donut-label-main">Cumplimiento general</div>
+                    {{SVG_DONA}}
+                </div>
+                <div class="compliance-stats">
+                    <div class="cs-item">
+                        <div class="cs-label">ASEC que cumplen la meta (≥{{META}}%)</div>
+                        <div class="cs-value">{{ASEC_CUMPLEN}} <span style="font-size:12px;font-weight:500;color:#64748b;">de {{ASEC_TOTAL}}</span></div>
+                        <div class="cs-sub">{{PCT_CUMPLIMIENTO}}% de cumplimiento</div>
+                    </div>
+                    <div class="cs-item">
+                        <div class="cs-label">Meta establecida</div>
+                        <div class="cs-value" style="color:#1d4ed8;">{{META}}%</div>
+                        <div class="cs-sub">Porcentaje mínimo aceptable</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLA ASEC -->
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#7c3aed;"></span> Resultados por ASEC</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Asesor</th>
+                        <th>Coordinación</th>
+                        <th class="text-center">Evals.</th>
+                        <th class="text-center">Promedio</th>
+                        <th class="text-center">Nivel</th>
+                        <th class="text-center">Meta alcanzada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{FILAS_ASEC}}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Resumen general</span>
+        <span>Periodo: {{PERIODO_CORTO}}</span>
+    </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 2 — DESEMPEÑO Y PROCESOS
+═══════════════════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Desempeño y distribución de procesos</div>
+        <div class="phi-period">{{PERIODO_CORTO}}</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot"></span> Desempeño por ASEC</div>
+            <div class="section-desc">La línea vertical indica la meta del {{META}}%. Las barras se colorean según nivel de cumplimiento: <span style="color:#16a34a;font-weight:600;">verde = Ideal</span> · <span style="color:#b45309;font-weight:600;">ámbar = Alerta</span> · <span style="color:#dc2626;font-weight:600;">rojo = Riesgo</span></div>
+            <div class="perf-list">
+                {{BARRAS_DESEMPENO}}
+            </div>
+        </div>
+
+        <div class="two-col">
+            <div class="section">
+                <div class="section-title"><span class="dot" style="background:#0891b2;"></span> Procesos evaluados</div>
+                <div class="proc-grid" style="grid-template-columns: 1fr 1fr;">
+                    {{TARJETAS_PROCESOS}}
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title"><span class="dot" style="background:#f59e0b;"></span> Distribución de evaluaciones</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Proceso</th>
+                            <th class="text-center">Grupos</th>
+                            <th class="text-center">Evals.</th>
+                            <th class="text-center">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>{{FILAS_PROCESOS}}</tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Desempeño y procesos</span>
+        <span>Periodo: {{PERIODO_CORTO}}</span>
+    </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 3 — PARÁMETROS
+═══════════════════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Resultados de parámetros</div>
+        <div class="phi-period">{{PERIODO_CORTO}}</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#dc2626;"></span> Resultados de parámetros</div>
+            <div class="section-desc">Distribución de resultados por parámetro y proceso. Las celdas se colorean de acuerdo al nivel de cumplimiento.</div>
+            {{BLOQUES_PARAMETROS}}
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Parámetros</span>
+        <span>Periodo: {{PERIODO_CORTO}}</span>
+    </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 4 — INCIDENCIAS POR ASESOR Y GRUPO
+═══════════════════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Resumen de incidencias en grupos</div>
+        <div class="phi-period">{{PERIODO_CORTO}}</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#dc2626;"></span> Incidencias por asesor y grupo</div>
+            <div class="section-desc">Observaciones y hallazgos registrados durante las evaluaciones del periodo, agrupados por asesor.</div>
+            {{BLOQUES_INCIDENCIAS}}
+        </div>
+
+        <!-- SECCIÓN COP / COORDINADORES (solo si hay evaluaciones ejecutivas) -->
+        {{#if_cop}}
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#7c3aed;"></span> Evaluaciones a coordinadores (COP)</div>
+            {{BLOQUES_COP}}
+        </div>
+        {{/if_cop}}
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Incidencias</span>
+        <span>Periodo: {{PERIODO_CORTO}}</span>
+    </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 5 — CONCLUSIONES
+═══════════════════════════════════════════════════════ -->
+<section class="page">
+
+    <div class="page-header-inner">
+        <div class="phi-title">Conclusiones del periodo</div>
+        <div class="phi-period">{{PERIODO_CORTO}}</div>
+    </div>
+
+    <div class="page-body" style="padding-bottom: 28px;">
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#059669;"></span> Conclusiones</div>
+            <div class="concl-box">
+                <p>
+                    Durante el periodo evaluado se realizaron <strong>{{CONCL_TOTAL_EVALUACIONES}} evaluaciones</strong>
+                    correspondientes a <strong>{{CONCL_TOTAL_GRUPOS}} grupos</strong> y
+                    <strong>{{CONCL_TOTAL_ASEC}} ASEC</strong> de las coordinaciones evaluadas.
+                </p>
+                <p>
+                    Del total de ASEC evaluados,
+                    <strong>{{CONCL_ASEC_CUMPLEN}} cumplieron con la meta establecida</strong>,
+                    mientras que {{CONCL_ASEC_NO_CUMPLEN}} se encontraron por debajo del resultado esperado.
+                </p>
+                <strong style="font-size:10px;">Principales hallazgos:</strong>
+                <ul class="concl-list">{{TEXTO_HALLAZGOS}}</ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><span class="dot" style="background:#1d4ed8;"></span> Resumen de resultados</div>
+            <table>
+                <thead>
+                    <tr><th>Indicador</th><th class="text-right">Resultado</th></tr>
+                </thead>
+                <tbody>{{FILAS_RESUMEN_FINAL}}</tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="page-footer">
+        <span><strong>Reporte de Evaluaciones</strong> — Conclusiones</span>
+        <span>Fin del reporte · {{FECHA_GENERACION}}</span>
+    </div>
+</section>
+
+</div>
+</body>
+</html>
