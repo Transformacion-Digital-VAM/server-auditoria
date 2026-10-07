@@ -18,6 +18,7 @@ router.get('/asesores', evaluationController.getAsesores);
 router.post('/', evaluationController.createEvaluation);
 router.get('/', evaluationController.getEvaluations);
 router.get('/clientes-master', evaluationController.getClientesMaster);
+router.get('/ejecutivas-master', evaluationController.getEjecutivasMaster);
 router.get('/reporte', generarReporte);
 router.get('/:id/fotos', evaluationController.getEvaluationPhotos);
 router.get('/:id', evaluationController.getEvaluationById);

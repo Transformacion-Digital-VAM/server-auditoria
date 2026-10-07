@@ -841,6 +841,56 @@ const getMiembrosGrupoConIndividual = async (req, res) => {
     }
 };
 
+const getEjecutivasMaster = async (req, res) => {
+    try {
+        const users = await dbControlVam.collection('users').find({
+            $or: [
+                { role: { $regex: /^master$/i } },
+                { rol: { $regex: /^master$/i } }
+            ]
+        }).toArray();
+
+        let coordsMap = new Map();
+        try {
+            const [coords1, coords2] = await Promise.all([
+                dbControlVam.collection('coordinacions').find({}).toArray(),
+                dbControlVam.collection('coordinacion').find({}).toArray()
+            ]);
+            coords1.forEach(c => coordsMap.set(c._id.toString(), c));
+            coords2.forEach(c => coordsMap.set(c._id.toString(), c));
+        } catch (e) {
+            console.error('Error al obtener coordinaciones para ejecutivas master:', e.message);
+        }
+
+        const data = users.map(u => {
+            const coordId = u.coordinacion ? u.coordinacion.toString() : '';
+            const coord = coordsMap.get(coordId);
+            const nombre = u.nombre || u.username || '';
+            return {
+                _id: u._id.toString(),
+                id: u._id.toString(),
+                username: u.username || '',
+                nombre: nombre,
+                rol: u.role || u.rol || 'master',
+                role: u.role || u.rol || 'master',
+                coordinacionId: coordId,
+                coordinacionNombre: coord ? (coord.nombre || '') : '',
+                coordinacionMunicipio: coord ? (coord.municipio || '') : '',
+                coordinacion: coord ? {
+                    _id: coordId,
+                    nombre: coord.nombre || '',
+                    municipio: coord.municipio || ''
+                } : null
+            };
+        }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+        res.status(200).json({ success: true, total: data.length, data });
+    } catch (error) {
+        console.error('Error al obtener ejecutivas master:', error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
+    }
+};
+
 module.exports = {
     getAllGrupos,
     getGruposPorAsesor,
@@ -857,5 +907,6 @@ module.exports = {
     getEvaluationBySucursal,
     getClientesEjecutivas,
     getClientesMaster,
-    getMiembrosGrupoConIndividual
+    getMiembrosGrupoConIndividual,
+    getEjecutivasMaster
 };
