@@ -93,14 +93,28 @@ function valorNivel(val) {
 }
 
 function calcularPorcentaje(ev) {
-    if (ev.calificacionTotal && ev.calificacionTotal > 0) {
-        return Math.round(ev.calificacionTotal);
+    if (ev.calificacionTotal !== undefined && ev.calificacionTotal !== null && Number(ev.calificacionTotal) > 0) {
+        return Math.round(Number(ev.calificacionTotal));
+    }
+
+    if (ev.calificacionesDetalle && typeof ev.calificacionesDetalle === 'object') {
+        const vals = Object.values(ev.calificacionesDetalle).map(valorNivel).filter(v => v !== null);
+        if (vals.length > 0) {
+            return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100);
+        }
     }
 
     const proceso = ev.datosGenerales?.procesoEvaluado || '';
     let campos = [];
 
     if (proceso === 'Recuperación') {
+        const ri = ev.recuperacionIndividuales || {};
+        const camposInd = [ri.recuperacionPactadoInd, ri.fichaCerradaInd, ri.registroHojaControlInd, ri.recibosInd];
+        const validosInd = camposInd.map(valorNivel).filter(v => v !== null);
+        if (validosInd.length > 0) {
+            return Math.round((validosInd.reduce((a, b) => a + b, 0) / validosInd.length) * 100);
+        }
+
         const r = ev.recuperacion || {};
         campos = [r.puntualidadAsesor, r.asistenciaGrupo, r.recuperacionPactado,
                   r.fichaCerrada, r.registroHojaControl, r.cotejoHojaControl, r.recibos];
@@ -132,12 +146,24 @@ function extraerNombreGrupo(dg) {
     return 'Sin nombre';
 }
 
+function esCreditoIndividual(ev) {
+    if (!ev) return false;
+    const dg = ev.datosGenerales || {};
+    if (ev.tipoCredito && String(ev.tipoCredito).toLowerCase().includes('individual')) return true;
+    if (dg.tipoCredito && String(dg.tipoCredito).toLowerCase().includes('individual')) return true;
+    if (dg.clienteIndividual?.nombre && String(dg.clienteIndividual.nombre).trim().length > 0) return true;
+    if (typeof dg.clienteIndividual === 'string' && dg.clienteIndividual.trim().length > 0) return true;
+    return false;
+}
+
 /**
  * Devuelve el texto de observaciones/incidencias de una evaluación.
  * Prioriza campos más específicos y no repite el mismo texto.
  */
 function extraerObservacion(ev) {
     const candidatos = [
+        ev.observacionesGenerales,
+        ev.datosGenerales?.observaciones,
         ev.recuperacion?.observacionesRecuperacion,
         ev.renovacion?.observacionesRenovacion,
         ev.cobranza?.observacionesCobranza,
@@ -257,7 +283,7 @@ function escapeHtml(text) {
 
 const generarReporte = async (req, res) => {
     try {
-        const { fechaInicio, fechaFin, tipoAuditoria } = req.query;
+        const { fechaInicio, fechaFin, tipoAuditoria, tipoReporte, limitePorAsesor } = req.query;
 
         if (!fechaInicio || !fechaFin) {
             return res.status(400).json({
@@ -273,22 +299,102 @@ const generarReporte = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Fechas inválidas.' });
         }
 
+        // ── 1. Determinar tipo de reporte: Semanal (≤ 7 días) vs Quincenal (> 10 días) ──
+        const diasPeriodo = Math.round((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+        const esQuincenal = tipoReporte === 'quincenal' || (!tipoReporte && diasPeriodo > 10);
+        const esSemanal   = !esQuincenal;
+
         const filtro = { 'datosGenerales.fechaEvaluacion': { $gte: inicio, $lte: fin } };
         if (tipoAuditoria) filtro.tipoAuditoria = tipoAuditoria;
 
-        const evaluaciones = await Evaluation.find(filtro).select('-evidenciaFotos').lean();
+        const evaluaciones = await Evaluation.find(filtro)
+            .select('-evidenciaFotos')
+            .sort({ 'datosGenerales.fechaEvaluacion': 1 })
+            .lean();
 
         if (evaluaciones.length === 0) {
             return res.status(404).json({ success: false, message: 'No se encontraron evaluaciones en el periodo indicado.' });
         }
 
-        // ── Separar evaluaciones: ASEC vs Ejecutivos/COP ─────────────────
-        const esEjecutivo = ev =>
-            ev.tipoAuditoria === 'Ejecutiva' ||
-            ['Procesos de Ejecutivas', 'Ejecutiva'].includes(ev.datosGenerales?.procesoEvaluado);
+        // ── IDs correspondientes a Ejecutivas ─────────────────────────────
+        const IDS_EJECUTIVAS = new Set([
+            '69f4bab69d6d25e533b24c19',
+            '69f4bc349d6d25e533b24c84',
+            '69f4bc739d6d25e533b24c87',
+            '69f4bca39d6d25e533b24c8a',
+            '69f4bd469d6d25e533b24c8d',
+            '69f8ec4702c19412d449c94c',
+            '69fd280255f770c409d0733e',
+            '6a42b871aa50224e9d3c3cae',
+            '6ac7c7f8b753861d82d7528c'
+        ]);
 
-        const evsASEC = evaluaciones.filter(ev => !esEjecutivo(ev));
-        const evsCOP  = evaluaciones.filter(ev => esEjecutivo(ev));
+        const esEjecutiva = ev => {
+            const id = String(ev.datosGenerales?.asesorEvaluadoId || '').trim();
+            if (IDS_EJECUTIVAS.has(id)) return true;
+            const tipo = String(ev.tipoAuditoria || '').toLowerCase();
+            const proc = String(ev.datosGenerales?.procesoEvaluado || '').toLowerCase();
+            return tipo.includes('ejecutiva') || proc.includes('ejecutiva');
+        };
+
+        const esProcesoRecuperacion = ev => {
+            const proc = String(ev.datosGenerales?.procesoEvaluado || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+            return proc === 'recuperacion';
+        };
+
+        // 1. Separar evaluaciones de Ejecutivas
+        const evsEjecutivas = evaluaciones.filter(ev => esEjecutiva(ev));
+
+        // 2. Evaluaciones de los demás (ASEC)
+        const todosOtros = evaluaciones.filter(ev => !esEjecutiva(ev));
+
+        let evsASEC = [];
+        let cuotaEquitativa = 1;
+
+        if (esQuincenal) {
+            // ── REPORTE QUINCENAL ──────────────────────────────────────────
+            // 1. Solo se toma en cuenta el proceso de Recuperación
+            const asecRecuperacion = todosOtros.filter(esProcesoRecuperacion);
+
+            // 2. Evaluación equitativa y justa: 1 grupo mínimo, 3 como máximo
+            // Agrupar evaluaciones de cada asesor
+            const evsPorAsesor = new Map();
+            for (const ev of asecRecuperacion) {
+                const asesor = ev.datosGenerales?.asesorEvaluadoNombre || 'Sin nombre';
+                if (!evsPorAsesor.has(asesor)) {
+                    evsPorAsesor.set(asesor, []);
+                }
+                evsPorAsesor.get(asesor).push(ev);
+            }
+
+            // Encontrar el mínimo de grupos evaluados entre los asesores
+            let minEvaluaciones = Infinity;
+            for (const evs of evsPorAsesor.values()) {
+                if (evs.length < minEvaluaciones) {
+                    minEvaluaciones = evs.length;
+                }
+            }
+
+            // Adaptar cuota: si varios tienen 3+ pero uno solo tiene 1, se toma 1 grupo.
+            // Si el mínimo es 2, se toman 2. Si el mínimo es 3+, se toman 3 (máximo 3).
+            cuotaEquitativa = minEvaluaciones !== Infinity
+                ? Math.min(3, Math.max(1, minEvaluaciones))
+                : 1;
+
+            // Tomar para cada asesor exactamente los primeros K grupos en orden cronológico
+            for (const evs of evsPorAsesor.values()) {
+                evs.sort((a, b) => new Date(a.datosGenerales?.fechaEvaluacion || 0) - new Date(b.datosGenerales?.fechaEvaluacion || 0));
+                evsASEC.push(...evs.slice(0, cuotaEquitativa));
+            }
+        } else {
+            // ── REPORTE SEMANAL ────────────────────────────────────────────
+            // Se toman en cuenta todos los procesos evaluados y todos los grupos/individuales evaluados en el periodo
+            evsASEC = todosOtros;
+        }
 
         // ── 1. Métricas globales ──────────────────────────────────────────
         const asecSet          = new Set();
@@ -317,7 +423,8 @@ const generarReporte = async (req, res) => {
         const totalAsec           = asecSet.size;
         const totalCoordinaciones = coordSet.size;
         const totalGrupos         = gruposSet.size;
-        const totalEvaluaciones   = evaluaciones.length;
+        // Solo contar evaluaciones ASEC; excluir procesos de Ejecutivas
+        const totalEvaluaciones   = evsASEC.length;
 
         // ── 2. Resultados por ASEC con detalle por grupo y listado de grupos ──
         const porAsesor = {};
@@ -334,12 +441,13 @@ const generarReporte = async (req, res) => {
             const semana = dg.semanaEvaluada || '';
             const ciclo  = dg.cicloEvaluado || '';
             const fecha  = dg.fechaEvaluacion;
+            const esInd  = esCreditoIndividual(ev);
 
             if (!porAsesor[nombre]) {
                 porAsesor[nombre] = { nombre, coord, pcts: [], grupos: [] };
             }
             porAsesor[nombre].pcts.push(pct);
-            porAsesor[nombre].grupos.push({ nombre: grupo, obs, proceso: proc, pct, semana, ciclo });
+            porAsesor[nombre].grupos.push({ nombre: grupo, obs, proceso: proc, pct, semana, ciclo, esIndividual: esInd });
 
             gruposEvaluados.push({
                 nombre,
@@ -356,7 +464,8 @@ const generarReporte = async (req, res) => {
                 barClase: barClase(pct),
                 color: nivelColor(pct),
                 cumpleMeta: pct >= META,
-                obs
+                obs,
+                esIndividual: esInd
             });
         }
 
@@ -407,18 +516,145 @@ const generarReporte = async (req, res) => {
             ...contarParametros(evsASEC, proc)
         }));
 
-        // ── 6. COP / Ejecutivos ───────────────────────────────────────────
-        const porCOP = {};
-        for (const ev of evsCOP) {
-            const nombre = ev.datosGenerales?.asesorEvaluadoNombre || 'Sin nombre';
-            const coord  = ev.datosGenerales?.coordinacionNombre   || '';
-            const proc   = ev.datosGenerales?.procesoEvaluado      || '';
-            const grupo  = ev.datosGenerales?.grupo?.nombre || ev.datosGenerales?.clienteIndividual?.nombre || '';
-            const obs    = extraerObservacion(ev);
+        // ── 6. Resultados de Ejecutivas — SEPARACIÓN Operativo vs Procesos de Ejecutivas ──
 
-            if (!porCOP[nombre]) porCOP[nombre] = { nombre, coord, proceso: proc, grupos: [] };
-            porCOP[nombre].grupos.push({ nombre: grupo, obs, proceso: proc });
+        // Clasificar: ¿es evaluación de "Procesos de Ejecutivas" o es auditoría operativa en campo?
+        const esProcEjecutivaEv = ev => {
+            const proc = String(ev.datosGenerales?.procesoEvaluado || '').toLowerCase();
+            const tipo = String(ev.tipoAuditoria || '').toLowerCase();
+            // "Procesos de Ejecutivas" o tipoAuditoria === "Ejecutiva" → proceso de ejecutiva
+            return proc.includes('ejecutiva') || tipo === 'ejecutiva';
+        };
+
+        // Separar
+        const evsEjecOperativas = evsEjecutivas.filter(ev => !esProcEjecutivaEv(ev));
+        const evsEjecProcesos   = evsEjecutivas.filter(ev => esProcEjecutivaEv(ev));
+
+        // ── 6a. Operativas de Ejecutivas (auditorías en campo: Recuperación, etc.) ──
+        const porEjecOp = {};
+        for (const ev of evsEjecOperativas) {
+            const dg     = ev.datosGenerales || {};
+            const nombre = dg.asesorEvaluadoNombre || 'Sin nombre';
+            const coord  = dg.coordinacionNombre   || 'Sin coordinación';
+            const proc   = dg.procesoEvaluado      || '';
+            const grupo  = extraerNombreGrupo(dg);
+            const obs    = extraerObservacion(ev);
+            const pct    = calcularPorcentaje(ev);
+            const semana = dg.semanaEvaluada        || '';
+            const ciclo  = dg.cicloEvaluado         || '';
+            const esInd  = esCreditoIndividual(ev);
+
+            if (!porEjecOp[nombre]) {
+                porEjecOp[nombre] = { nombre, coord, pcts: [], grupos: [] };
+            }
+            porEjecOp[nombre].pcts.push(pct);
+            porEjecOp[nombre].grupos.push({ nombre: grupo, obs, proceso: proc, pct, semana, ciclo, esIndividual: esInd });
         }
+
+        const ejecOpResultados = Object.values(porEjecOp).map(a => {
+            const promedio = Math.round(a.pcts.reduce((s, v) => s + v, 0) / a.pcts.length);
+            return {
+                nombre: a.nombre, coord: a.coord,
+                totalEvaluaciones: a.pcts.length, promedio,
+                nivel: nivelTexto(promedio), badgeClase: nivelClase(promedio),
+                barClase: barClase(promedio), color: nivelColor(promedio),
+                cumpleMeta: promedio >= META, grupos: a.grupos
+            };
+        }).sort((a, b) => b.promedio - a.promedio);
+
+        const totalEjecOp     = ejecOpResultados.length;
+        const evalsEjecOp     = evsEjecOperativas.length;
+        const promEjecOp      = totalEjecOp > 0 ? Math.round(ejecOpResultados.reduce((s, e) => s + e.promedio, 0) / totalEjecOp) : 0;
+        const ejecOpCumplen   = ejecOpResultados.filter(e => e.cumpleMeta).length;
+
+        // ── 6b. Procesos de Ejecutivas (actividades administrativas y de sucursal) ──
+        // Etiquetas legibles para las claves de calificacionesDetalle
+        const LABELS_DETALLE_EJEC = {
+            rec_cuadrar:        'Cuadrar recuperación',
+            rec_zona_roja:      'Zona roja',
+            rec_impresion:      'Impresión de reportes',
+            col_envio:          'Envío de colocación',
+            col_expediente:     'Expediente completo',
+            col_tesoreria:      'Tesorería',
+            col_credito_magico: 'Crédito mágico',
+            conc_envio:         'Envío de conciliación',
+            reu_seguimiento:    'Seguimiento de reuniones',
+            proy_escanea:       'Escaneo de proyectos',
+            gar_solicitud:      'Solicitud de garantías',
+            cal_recibe:         'Recibe calidad',
+            req_insumos:        'Requerimiento de insumos',
+            req_ahorros:        'Requerimiento de ahorros'
+        };
+
+        // Categorías para agrupar las actividades
+        const CATEGORIAS_EJEC = {
+            'Recuperación':     ['rec_cuadrar', 'rec_zona_roja', 'rec_impresion'],
+            'Colocación':       ['col_envio', 'col_expediente', 'col_tesoreria', 'col_credito_magico'],
+            'Conciliación':     ['conc_envio'],
+            'Reuniones':        ['reu_seguimiento'],
+            'Proyectos':        ['proy_escanea'],
+            'Garantías':        ['gar_solicitud'],
+            'Calidad':          ['cal_recibe'],
+            'Requerimientos':   ['req_insumos', 'req_ahorros']
+        };
+
+        const porEjecProc = {};
+        for (const ev of evsEjecProcesos) {
+            const dg     = ev.datosGenerales || {};
+            const nombre = dg.asesorEvaluadoNombre || 'Sin nombre';
+            const coord  = dg.coordinacionNombre   || 'Sin coordinación';
+            const grupo  = extraerNombreGrupo(dg);
+            const obs    = extraerObservacion(ev);
+            const pct    = calcularPorcentaje(ev);
+            const semana = dg.semanaEvaluada        || '';
+            const ciclo  = dg.cicloEvaluado         || '';
+
+            if (!porEjecProc[nombre]) {
+                porEjecProc[nombre] = { nombre, coord, pcts: [], grupos: [], detalles: [] };
+            }
+            porEjecProc[nombre].pcts.push(pct);
+            porEjecProc[nombre].grupos.push({ nombre: grupo, obs, pct, semana, ciclo });
+            if (ev.calificacionesDetalle && Object.keys(ev.calificacionesDetalle).length > 0) {
+                porEjecProc[nombre].detalles.push(ev.calificacionesDetalle);
+            }
+        }
+
+        const ejecProcResultados = Object.values(porEjecProc).map(a => {
+            const promedio = Math.round(a.pcts.reduce((s, v) => s + v, 0) / a.pcts.length);
+            return {
+                nombre: a.nombre, coord: a.coord,
+                totalEvaluaciones: a.pcts.length, promedio,
+                nivel: nivelTexto(promedio), badgeClase: nivelClase(promedio),
+                barClase: barClase(promedio), color: nivelColor(promedio),
+                cumpleMeta: promedio >= META, grupos: a.grupos, detalles: a.detalles
+            };
+        }).sort((a, b) => b.promedio - a.promedio);
+
+        const totalEjecProc     = ejecProcResultados.length;
+        const evalsEjecProc     = evsEjecProcesos.length;
+        const promEjecProc      = totalEjecProc > 0 ? Math.round(ejecProcResultados.reduce((s, e) => s + e.promedio, 0) / totalEjecProc) : 0;
+        const ejecProcCumplen   = ejecProcResultados.filter(e => e.cumpleMeta).length;
+
+        // Conteo global de actividades por categoría (para desglose)
+        const conteoActividades = {};
+        for (const ev of evsEjecProcesos) {
+            const det = ev.calificacionesDetalle || {};
+            for (const [key, val] of Object.entries(det)) {
+                if (!conteoActividades[key]) conteoActividades[key] = { ideal: 0, alerta: 0, riesgo: 0 };
+                const v = String(val).toLowerCase();
+                if (v.includes('ideal') || v.includes('totalmente')) conteoActividades[key].ideal++;
+                else if (v.includes('alerta') || v.includes('parcial')) conteoActividades[key].alerta++;
+                else if (v.includes('riesgo') || v === 'no') conteoActividades[key].riesgo++;
+            }
+        }
+
+        // Métricas globales combinadas para referencia
+        const totalEjecutivas = new Set([...Object.keys(porEjecOp), ...Object.keys(porEjecProc)]).size;
+        const evaluacionesEjecutivas = evsEjecutivas.length;
+        const ejecutivasCumplen = totalEjecutivas; // se recalcula abajo
+        const promedioGeneralEjecutivas = evaluacionesEjecutivas > 0 ? Math.round(
+            evsEjecutivas.reduce((s, ev) => s + calcularPorcentaje(ev), 0) / evaluacionesEjecutivas
+        ) : 0;
 
         // ── 7. Auto-conclusiones ──────────────────────────────────────────
         const asecRiesgo = asecResultados.filter(a => a.promedio < 60);
@@ -476,7 +712,14 @@ const generarReporte = async (req, res) => {
         const filasGrupos = gruposEvaluados.map((g, idx) => `
             <tr>
                 <td class="text-center" style="color:var(--muted);font-weight:600;font-size:9px;">${idx + 1}</td>
-                <td><strong>${escapeHtml(g.grupo.toUpperCase())}</strong></td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <strong>${escapeHtml(g.grupo.toUpperCase())}</strong>
+                        <span class="badge ${g.esIndividual ? 'badge-warning' : 'badge-info'}" style="font-size:7.5px;padding:1px 5px;">
+                            ${g.esIndividual ? 'INDIVIDUAL' : 'GRUPAL'}
+                        </span>
+                    </div>
+                </td>
                 <td>${escapeHtml(g.nombre.toUpperCase())}</td>
                 <td>${escapeHtml(g.coord.toUpperCase())}</td>
                 <td><span class="badge badge-info">${escapeHtml(g.proc || 'N/A')}</span></td>
@@ -497,7 +740,7 @@ const generarReporte = async (req, res) => {
                 </td>
             </tr>`).join('');
 
-        // Barras de desempeño
+        // Barras de desempeño ASEC
         const barrasDesempeno = asecResultados.map(a => `
             <div class="perf-row">
                 <div class="perf-name">${escapeHtml(a.nombre)}</div>
@@ -572,7 +815,7 @@ const generarReporte = async (req, res) => {
                 contenido += gruposConObs.map(g => `
                     <div class="grupo-inc-item">
                         <div class="grupo-inc-nombre">
-                            <span class="grupo-tag">G.</span> ${escapeHtml(g.nombre || 'Sin nombre')}
+                            <span class="grupo-tag" ${g.esIndividual ? 'style="background:#d97706;"' : ''}>${g.esIndividual ? 'IND' : 'G.'}</span> ${escapeHtml(g.nombre || 'Sin nombre')}
                             ${g.proceso ? `<span class="proceso-tag">${escapeHtml(g.proceso)}</span>` : ''}
                             <span class="badge ${nivelClase(g.pct)}" style="margin-left:auto;font-size:8.5px;font-weight:700;">Calificación: ${g.pct}% · ${nivelTexto(g.pct)}</span>
                         </div>
@@ -584,7 +827,7 @@ const generarReporte = async (req, res) => {
                 contenido += gruposSinObs.map(g => `
                     <div class="grupo-inc-item" style="border-left-color: #16a34a;">
                         <div class="grupo-inc-nombre">
-                            <span class="grupo-tag" style="background:#16a34a;">G.</span> ${escapeHtml(g.nombre || 'Sin nombre')}
+                            <span class="grupo-tag" style="background:${g.esIndividual ? '#d97706' : '#16a34a'};">${g.esIndividual ? 'IND' : 'G.'}</span> ${escapeHtml(g.nombre || 'Sin nombre')}
                             ${g.proceso ? `<span class="proceso-tag">${escapeHtml(g.proceso)}</span>` : ''}
                             <span class="badge ${nivelClase(g.pct)}" style="margin-left:auto;font-size:8.5px;font-weight:700;">Calificación: ${g.pct}% · ${nivelTexto(g.pct)}</span>
                         </div>
@@ -615,38 +858,273 @@ const generarReporte = async (req, res) => {
             </div>`;
         }).join('');
 
-        // ── BLOQUE DE COORDINADORES/COP ───────────────────────────────────
-        let bloquesCOP = '';
-        const copList = Object.values(porCOP);
+        // ══════════════════════════════════════════════════════════════════
+        // HTML SECCIÓN A: OPERATIVAS DE EJECUTIVAS (auditorías en campo)
+        // ══════════════════════════════════════════════════════════════════
 
-        if (copList.length > 0) {
-            bloquesCOP = copList.map(cop => {
-                const gruposHTML = cop.grupos.map(g => `
-                    <div class="grupo-inc-item">
-                        ${g.nombre ? `<div class="grupo-inc-nombre">
-                            <span class="grupo-tag">G.</span> ${escapeHtml(g.nombre)}
-                            ${g.proceso ? `<span class="proceso-tag">${escapeHtml(g.proceso)}</span>` : ''}
-                        </div>` : ''}
-                        ${g.obs ? `<div class="grupo-inc-obs">${escapeHtml(g.obs)}</div>` : ''}
-                    </div>`).join('') || `<div class="no-incidents">Sin incidencias registradas.</div>`;
+        // Barras de desempeño operativo de ejecutivas
+        const barrasEjecOperativas = ejecOpResultados.map(a => `
+            <div class="perf-row">
+                <div class="perf-name">${escapeHtml(a.nombre)}</div>
+                <div class="perf-track">
+                    <div class="perf-bar ${a.barClase}" style="width:${a.promedio}%;"></div>
+                </div>
+                <div class="perf-val" style="color:${a.color};">${a.promedio}%</div>
+            </div>`).join('') || '<div class="no-incidents">Sin datos de auditorías operativas para ejecutivas.</div>';
 
-                return `
-                <div class="advisor-block" style="border-left: 3px solid #7c3aed;">
-                    <div class="advisor-header">
-                        <div>
-                            <div class="advisor-name" style="color:#7c3aed;">
-                                COP ${escapeHtml(cop.nombre.toUpperCase())}
-                            </div>
-                            <div class="advisor-coord">
-                                <strong>COORD</strong> ${escapeHtml(cop.coord || 'N/A')} &nbsp;·&nbsp;
-                                Proceso: ${escapeHtml(cop.proceso || 'N/A')}
-                            </div>
-                        </div>
-                        <span class="badge badge-info">Coordinador</span>
+        // Filas tabla operativa de ejecutivas (detalle de grupos/individuales)
+        const gruposEjecOp = [];
+        for (const a of ejecOpResultados) {
+            for (const g of a.grupos) {
+                gruposEjecOp.push({ ...g, asesor: a.nombre, coord: a.coord, color: nivelColor(g.pct) });
+            }
+        }
+        gruposEjecOp.sort((a, b) => b.pct - a.pct);
+
+        const filasEjecOperativas = gruposEjecOp.map((g, idx) => `
+            <tr>
+                <td class="text-center" style="color:var(--muted);font-weight:600;font-size:9px;">${idx + 1}</td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <strong>${escapeHtml((g.nombre || 'S/N').toUpperCase())}</strong>
+                        <span class="badge ${g.esIndividual ? 'badge-warning' : 'badge-info'}" style="font-size:7.5px;padding:1px 5px;">
+                            ${g.esIndividual ? 'INDIVIDUAL' : 'GRUPAL'}
+                        </span>
                     </div>
-                    <div class="grupos-inc-list">${gruposHTML}</div>
+                </td>
+                <td>${escapeHtml(g.asesor.toUpperCase())}</td>
+                <td>${escapeHtml(g.coord.toUpperCase())}</td>
+                <td><span class="badge badge-info">${escapeHtml(g.proceso || 'N/A')}</span></td>
+                <td class="text-center" style="font-size:9px;color:var(--slate);">${escapeHtml(g.semana ? `S${g.semana}` : '-')}${g.ciclo ? ` / C${g.ciclo}` : ''}</td>
+                <td class="text-center">
+                    <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <div style="width:34px;height:5px;background:var(--border);border-radius:10px;overflow:hidden;">
+                            <div style="width:${g.pct}%;height:100%;background:${g.color};border-radius:10px;"></div>
+                        </div>
+                        <span style="font-weight:800;color:${g.color};font-size:11px;">${g.pct}%</span>
+                    </div>
+                </td>
+                <td class="text-center"><span class="badge ${nivelClase(g.pct)}">${nivelTexto(g.pct)}</span></td>
+                <td class="text-center">
+                    <span class="badge ${g.pct >= META ? 'badge-success' : 'badge-danger'}">
+                        ${g.pct >= META ? 'SI' : 'NO'}
+                    </span>
+                </td>
+            </tr>`).join('') || `<tr><td colspan="9" class="text-center" style="color:var(--muted);padding:12px;">Sin auditorías operativas de ejecutivas.</td></tr>`;
+
+        // Bloques de incidencias operativas de ejecutivas
+        const bloquesIncidenciasEjecOp = ejecOpResultados.map(a => {
+            const badgeMeta = a.cumpleMeta
+                ? `<span class="badge badge-success">Meta: SI</span>`
+                : `<span class="badge badge-danger">Meta: NO</span>`;
+
+            const gruposConObs = a.grupos.filter(g => g.obs && g.obs.trim());
+            const gruposSinObs = a.grupos.filter(g => !g.obs || !g.obs.trim());
+            let contenido = '';
+
+            if (gruposConObs.length > 0) {
+                contenido += gruposConObs.map(g => `
+                    <div class="grupo-inc-item">
+                        <div class="grupo-inc-nombre">
+                            <span class="grupo-tag" ${g.esIndividual ? 'style="background:#d97706;"' : ''}>${g.esIndividual ? 'IND' : 'G.'}</span> ${escapeHtml(g.nombre || 'Sin nombre')}
+                            ${g.proceso ? `<span class="proceso-tag">${escapeHtml(g.proceso)}</span>` : ''}
+                            <span class="badge ${nivelClase(g.pct)}" style="margin-left:auto;font-size:8.5px;font-weight:700;">${g.pct}% · ${nivelTexto(g.pct)}</span>
+                        </div>
+                        <div class="grupo-inc-obs">${escapeHtml(g.obs)}</div>
+                    </div>`).join('');
+            }
+            if (gruposSinObs.length > 0) {
+                contenido += gruposSinObs.map(g => `
+                    <div class="grupo-inc-item" style="border-left-color:#16a34a;">
+                        <div class="grupo-inc-nombre">
+                            <span class="grupo-tag" style="background:${g.esIndividual ? '#d97706' : '#16a34a'};">${g.esIndividual ? 'IND' : 'G.'}</span> ${escapeHtml(g.nombre || 'Sin nombre')}
+                            ${g.proceso ? `<span class="proceso-tag">${escapeHtml(g.proceso)}</span>` : ''}
+                            <span class="badge ${nivelClase(g.pct)}" style="margin-left:auto;font-size:8.5px;font-weight:700;">${g.pct}% · ${nivelTexto(g.pct)}</span>
+                        </div>
+                        <div class="grupo-inc-obs" style="color:var(--muted);font-style:italic;">Sin incidencias reportadas.</div>
+                    </div>`).join('');
+            }
+            if (!contenido) contenido = '<div class="no-incidents">Sin incidencias registradas.</div>';
+
+            return `
+            <div class="advisor-block" style="border-left: 3px solid #0891b2;">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name" style="color:#0891b2;">${escapeHtml(a.nombre.toUpperCase())}</div>
+                        <div class="advisor-coord">
+                            <strong>COORD</strong> ${escapeHtml(a.coord || 'N/A')} &nbsp;·&nbsp;
+                            ${a.totalEvaluaciones} evaluación${a.totalEvaluaciones !== 1 ? 'es' : ''} en campo
+                        </div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:${a.color};">${a.promedio}%</div>
+                        ${badgeMeta}
+                    </div>
+                </div>
+                <div class="grupos-inc-list">${contenido}</div>
+            </div>`;
+        }).join('') || '<div class="no-incidents">Sin incidencias operativas de ejecutivas.</div>';
+
+        // ══════════════════════════════════════════════════════════════════
+        // HTML SECCIÓN B: PROCESOS DE EJECUTIVAS (actividades administrativas)
+        // ══════════════════════════════════════════════════════════════════
+
+        // Barras de desempeño procesos de ejecutivas
+        const barrasEjecProcesos = ejecProcResultados.map(a => `
+            <div class="perf-row">
+                <div class="perf-name">${escapeHtml(a.nombre)}</div>
+                <div class="perf-track">
+                    <div class="perf-bar ${a.barClase}" style="width:${a.promedio}%;"></div>
+                </div>
+                <div class="perf-val" style="color:${a.color};">${a.promedio}%</div>
+            </div>`).join('') || '<div class="no-incidents">Sin datos de procesos de ejecutivas.</div>';
+
+        // Filas tabla procesos de ejecutivas
+        const gruposEjecProc = [];
+        for (const a of ejecProcResultados) {
+            for (const g of a.grupos) {
+                gruposEjecProc.push({ ...g, asesor: a.nombre, coord: a.coord, color: nivelColor(g.pct) });
+            }
+        }
+        gruposEjecProc.sort((a, b) => b.pct - a.pct);
+
+        const filasEjecProcesos = gruposEjecProc.map((g, idx) => `
+            <tr>
+                <td class="text-center" style="color:var(--muted);font-weight:600;font-size:9px;">${idx + 1}</td>
+                <td><strong>${escapeHtml(g.asesor.toUpperCase())}</strong></td>
+                <td>${escapeHtml(g.coord.toUpperCase())}</td>
+                <td class="text-center" style="font-size:9px;color:var(--slate);">${escapeHtml(g.semana ? `S${g.semana}` : '-')}${g.ciclo ? ` / C${g.ciclo}` : ''}</td>
+                <td class="text-center">
+                    <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <div style="width:34px;height:5px;background:var(--border);border-radius:10px;overflow:hidden;">
+                            <div style="width:${g.pct}%;height:100%;background:${g.color};border-radius:10px;"></div>
+                        </div>
+                        <span style="font-weight:800;color:${g.color};font-size:11px;">${g.pct}%</span>
+                    </div>
+                </td>
+                <td class="text-center"><span class="badge ${nivelClase(g.pct)}">${nivelTexto(g.pct)}</span></td>
+                <td class="text-center">
+                    <span class="badge ${g.pct >= META ? 'badge-success' : 'badge-danger'}">
+                        ${g.pct >= META ? 'SI' : 'NO'}
+                    </span>
+                </td>
+            </tr>`).join('') || `<tr><td colspan="7" class="text-center" style="color:var(--muted);padding:12px;">Sin evaluaciones de procesos de ejecutivas.</td></tr>`;
+
+        // Bloques de desglose de actividades por categoría e incidencias
+        let bloquesDetalleEjecProcesos = '';
+
+        // Tabla de desglose por actividad (conteo global)
+        if (Object.keys(conteoActividades).length > 0) {
+            let tablaActividades = '';
+            for (const [categoria, keys] of Object.entries(CATEGORIAS_EJEC)) {
+                const keysPresentes = keys.filter(k => conteoActividades[k]);
+                if (keysPresentes.length === 0) continue;
+
+                tablaActividades += `
+                <div class="param-block" style="margin-bottom:12px;">
+                    <div class="param-header">
+                        <h3>${escapeHtml(categoria)}</h3>
+                        <span>${keysPresentes.length} actividad${keysPresentes.length !== 1 ? 'es' : ''}</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Actividad</th>
+                                <th class="text-center" style="background:#16a34a;">Ideal</th>
+                                <th class="text-center" style="background:#b45309;">Alerta</th>
+                                <th class="text-center" style="background:#dc2626;">Riesgo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${keysPresentes.map(k => {
+                                const c = conteoActividades[k];
+                                return `<tr>
+                                    <td>${escapeHtml(LABELS_DETALLE_EJEC[k] || k)}</td>
+                                    <td class="text-center cell-ideal">${c.ideal}</td>
+                                    <td class="text-center cell-alerta">${c.alerta}</td>
+                                    <td class="text-center cell-riesgo">${c.riesgo}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
                 </div>`;
-            }).join('');
+            }
+
+            // Actividades sin categoría conocida
+            const keysConocidas = new Set(Object.values(CATEGORIAS_EJEC).flat());
+            const keysDesconocidas = Object.keys(conteoActividades).filter(k => !keysConocidas.has(k));
+            if (keysDesconocidas.length > 0) {
+                tablaActividades += `
+                <div class="param-block" style="margin-bottom:12px;">
+                    <div class="param-header">
+                        <h3>Otras actividades</h3>
+                        <span>${keysDesconocidas.length} actividad${keysDesconocidas.length !== 1 ? 'es' : ''}</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Actividad</th>
+                                <th class="text-center" style="background:#16a34a;">Ideal</th>
+                                <th class="text-center" style="background:#b45309;">Alerta</th>
+                                <th class="text-center" style="background:#dc2626;">Riesgo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${keysDesconocidas.map(k => {
+                                const c = conteoActividades[k];
+                                return `<tr>
+                                    <td>${escapeHtml(LABELS_DETALLE_EJEC[k] || k)}</td>
+                                    <td class="text-center cell-ideal">${c.ideal}</td>
+                                    <td class="text-center cell-alerta">${c.alerta}</td>
+                                    <td class="text-center cell-riesgo">${c.riesgo}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+
+            bloquesDetalleEjecProcesos += tablaActividades;
+        }
+
+        // Incidencias por ejecutiva en procesos
+        bloquesDetalleEjecProcesos += ejecProcResultados.map(ej => {
+            const gruposConObs = ej.grupos.filter(g => g.obs && g.obs.trim());
+            if (gruposConObs.length === 0) return '';
+
+            return `
+            <div class="advisor-block" style="border-left: 3px solid #7c3aed; margin-top:10px;">
+                <div class="advisor-header">
+                    <div>
+                        <div class="advisor-name" style="color:#7c3aed;">${escapeHtml(ej.nombre.toUpperCase())}</div>
+                        <div class="advisor-coord">
+                            <strong>COORD</strong> ${escapeHtml(ej.coord || 'N/A')} &nbsp;·&nbsp;
+                            ${ej.totalEvaluaciones} evaluación${ej.totalEvaluaciones !== 1 ? 'es' : ''}
+                        </div>
+                    </div>
+                    <div class="advisor-score-wrap">
+                        <div class="advisor-score" style="color:${ej.color};">${ej.promedio}%</div>
+                        <span class="badge ${ej.cumpleMeta ? 'badge-success' : 'badge-danger'}">
+                            ${ej.cumpleMeta ? 'CUMPLE' : 'NO CUMPLE'}
+                        </span>
+                    </div>
+                </div>
+                <div class="grupos-inc-list">
+                    ${gruposConObs.map(g => `
+                        <div class="grupo-inc-item" style="border-left-color:#7c3aed;">
+                            <div class="grupo-inc-nombre">
+                                <span class="grupo-tag" style="background:#7c3aed;">EJEC</span> Procesos de Ejecutivas
+                                ${g.semana ? `<span class="proceso-tag">Sem ${escapeHtml(g.semana)}</span>` : ''}
+                                <span style="font-weight:800;color:${nivelColor(g.pct)};font-size:10px;margin-left:auto;">${g.pct}%</span>
+                            </div>
+                            <div class="grupo-inc-obs">${escapeHtml(g.obs)}</div>
+                        </div>`).join('')}
+                </div>
+            </div>`;
+        }).join('');
+
+        if (!bloquesDetalleEjecProcesos.trim()) {
+            bloquesDetalleEjecProcesos = '<div class="no-incidents">Sin detalles ni incidencias de procesos de ejecutivas en el periodo.</div>';
         }
 
         // ── Hallazgos para conclusiones ───────────────────────────────────
@@ -664,48 +1142,59 @@ const generarReporte = async (req, res) => {
             textoHallazgos += `<li>${escapeHtml(a.nombre)} presenta nivel de riesgo con ${a.promedio}%, requiriendo atención prioritaria.</li>`;
         });
 
-        // ── Tabla resumen final ───────────────────────────────────────────
-        const filasResumenFinal = `
-            <tr><td>ASEC evaluados</td><td class="text-right"><strong>${totalAsec}</strong></td></tr>
-            <tr><td>Coordinaciones evaluadas</td><td class="text-right"><strong>${totalCoordinaciones}</strong></td></tr>
-            <tr><td>Grupos evaluados</td><td class="text-right"><strong>${totalGrupos}</strong></td></tr>
-            <tr><td>Evaluaciones realizadas</td><td class="text-right"><strong>${totalEvaluaciones}</strong></td></tr>
-            <tr><td>ASEC que cumplen la meta</td><td class="text-right"><strong>${asecCumplen}</strong></td></tr>
-            <tr><td>ASEC que no cumplen la meta</td><td class="text-right"><strong>${asecNoCumplen}</strong></td></tr>
-            ${copList.length > 0 ? `<tr><td>Coordinadores auditados</td><td class="text-right"><strong>${copList.length}</strong></td></tr>` : ''}
-        `;
+        const resumenPeriodoTexto = esQuincenal
+            ? `Este reporte quincenal contempla únicamente el proceso de <strong>Recuperación</strong> evaluado bajo un criterio equitativo y justo (${cuotaEquitativa} grupo${cuotaEquitativa !== 1 ? 's' : ''} por asesor evaluado), garantizando igualdad de condiciones en la muestra analizada.`
+            : `Este reporte semanal integra <strong>todos los procesos operativos evaluados</strong> (${procesosTexto || 'Recuperación, Renovación, Desembolso, Cobranza'}), reflejando el 100% de los grupos y créditos individuales auditados en el periodo sin tope de muestra.`;
 
         // ── Leer template y reemplazar placeholders ───────────────────────
         const templatePath = path.join(__dirname, '../templates/reporte_acc_template.html');
         let html = fs.readFileSync(templatePath, 'utf8');
 
         const reemplazos = {
-            PERIODO_LARGO:            periodoLargo,
-            PERIODO_CORTO:            periodoCorto,
-            FECHA_GENERACION:         fechaGeneracion,
-            TIPO_AUDITORIA:           tipoLabel,
-            TOTAL_ASEC:               totalAsec,
-            TOTAL_COORDINACIONES:     totalCoordinaciones,
-            TOTAL_GRUPOS:             totalGrupos,
-            TOTAL_EVALUACIONES:       totalEvaluaciones,
-            ASEC_CUMPLEN:             asecCumplen,
-            ASEC_TOTAL:               totalAsec,
-            PCT_CUMPLIMIENTO:         pctCumplimiento,
-            META:                     META,
-            SVG_DONA:                 svgDona,
-            COORD_RESUMEN:            coordResumenTexto,
-            PROCESOS_TEXTO:           procesosTexto,
-            COP_COUNT:                copList.length,
-            FILAS_ASEC:               filasAsec,
-            FILAS_GRUPOS:             filasGrupos,
-            BARRAS_DESEMPENO:         barrasDesempeno,
-            TARJETAS_PROCESOS:        tarjetasProcesos,
-            FILAS_PROCESOS:           filasProcesos,
-            BLOQUES_PARAMETROS:       bloquesParametros,
-            BLOQUES_INCIDENCIAS:      bloquesIncidencias,
-            BLOQUES_COP:              bloquesCOP,
-            TEXTO_HALLAZGOS:          textoHallazgos,
-            FILAS_RESUMEN_FINAL:      filasResumenFinal,
+            PERIODO_LARGO:               periodoLargo,
+            PERIODO_CORTO:               periodoCorto,
+            FECHA_GENERACION:            fechaGeneracion,
+            TIPO_AUDITORIA:              tipoLabel,
+            RESUMEN_PERIODO_TEXTO:       resumenPeriodoTexto,
+            TOTAL_ASEC:                  totalAsec,
+            TOTAL_COORDINACIONES:        totalCoordinaciones,
+            TOTAL_GRUPOS:                totalGrupos,
+            TOTAL_EVALUACIONES:          totalEvaluaciones,
+            ASEC_CUMPLEN:                asecCumplen,
+            ASEC_TOTAL:                  totalAsec,
+            PCT_CUMPLIMIENTO:            pctCumplimiento,
+            META:                        META,
+            SVG_DONA:                    svgDona,
+            COORD_RESUMEN:               coordResumenTexto,
+            PROCESOS_TEXTO:              procesosTexto,
+            COP_COUNT:                   0,
+            FILAS_ASEC:                  filasAsec,
+            FILAS_GRUPOS:                filasGrupos,
+            BARRAS_DESEMPENO:            barrasDesempeno,
+            TARJETAS_PROCESOS:           tarjetasProcesos,
+            FILAS_PROCESOS:              filasProcesos,
+            BLOQUES_PARAMETROS:          bloquesParametros,
+            BLOQUES_INCIDENCIAS:         bloquesIncidencias,
+            BLOQUES_COP:                 '',
+            // ── Sección Operativas de Ejecutivas ──
+            TOTAL_EJEC_OPERATIVAS:       totalEjecOp,
+            EVALS_EJEC_OPERATIVAS:       evalsEjecOp,
+            PROMEDIO_EJEC_OPERATIVAS:    promEjecOp,
+            EJEC_OPERATIVAS_CUMPLEN:     ejecOpCumplen,
+            BARRAS_EJEC_OPERATIVAS:      barrasEjecOperativas,
+            FILAS_EJEC_OPERATIVAS:       filasEjecOperativas,
+            BLOQUES_INCIDENCIAS_EJEC_OP: bloquesIncidenciasEjecOp,
+            // ── Sección Procesos de Ejecutivas ──
+            TOTAL_EJEC_PROCESOS:         totalEjecProc,
+            EVALS_EJEC_PROCESOS:         evalsEjecProc,
+            PROMEDIO_EJEC_PROCESOS:      promEjecProc,
+            EJEC_PROCESOS_CUMPLEN:       ejecProcCumplen,
+            BARRAS_EJEC_PROCESOS:        barrasEjecProcesos,
+            FILAS_EJEC_PROCESOS:         filasEjecProcesos,
+            BLOQUES_DETALLE_EJEC_PROCESOS: bloquesDetalleEjecProcesos,
+            // ── Conclusiones ──
+            TEXTO_HALLAZGOS:             textoHallazgos,
+            FILAS_RESUMEN_FINAL:         '',
             CONCL_TOTAL_EVALUACIONES: totalEvaluaciones,
             CONCL_TOTAL_GRUPOS:       totalGrupos,
             CONCL_TOTAL_ASEC:         totalAsec,
@@ -717,13 +1206,22 @@ const generarReporte = async (req, res) => {
             html = html.replaceAll(`{{${key}}}`, value);
         }
 
-        // Manejar bloque condicional de COP
-        if (copList.length > 0) {
-            html = html.replace(/\{\{#if_cop\}\}/g, '').replace(/\{\{\/if_cop\}\}/g, '');
+        // Manejar bloques condicionales de Ejecutivas (2 secciones separadas)
+        if (totalEjecOp > 0) {
+            html = html.replace(/\{\{#if_ejecutivas_operativas\}\}/g, '').replace(/\{\{\/if_ejecutivas_operativas\}\}/g, '');
         } else {
-            // Eliminar el bloque completo si no hay COPs
-            html = html.replace(/\{\{#if_cop\}\}[\s\S]*?\{\{\/if_cop\}\}/g, '');
+            html = html.replace(/\{\{#if_ejecutivas_operativas\}\}[\s\S]*?\{\{\/if_ejecutivas_operativas\}\}/g, '');
         }
+
+        if (totalEjecProc > 0) {
+            html = html.replace(/\{\{#if_ejecutivas_procesos\}\}/g, '').replace(/\{\{\/if_ejecutivas_procesos\}\}/g, '');
+        } else {
+            html = html.replace(/\{\{#if_ejecutivas_procesos\}\}[\s\S]*?\{\{\/if_ejecutivas_procesos\}\}/g, '');
+        }
+
+        // Limpiar bloques condicionales obsoletos
+        html = html.replace(/\{\{#if_ejecutivas\}\}[\s\S]*?\{\{\/if_ejecutivas\}\}/g, '');
+        html = html.replace(/\{\{#if_cop\}\}[\s\S]*?\{\{\/if_cop\}\}/g, '');
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Content-Disposition', `inline; filename="reporte_${fechaInicio}_${fechaFin}.html"`);
